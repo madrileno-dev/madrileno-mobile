@@ -175,10 +175,10 @@ minimum tap targets, `accessibilityLabel` on icon-only buttons.
   sonner-native toast with a **Reload** action calling `reloadAsync`. Never
   applies silently; disabled in dev and in Expo Go.
 - Assets: `assets/icon.svg` and `assets/splash.svg` are the sources;
-  `scripts/generate-assets.mjs` (sharp) rasterizes app icon, adaptive icon
-  foreground/background, and splash PNGs into `assets/generated/` (gitignored
-  at scaffold time, run in `prebuild` via a `postinstall`-free explicit
-  script so CI regenerates them).
+  `scripts/generate-assets.mjs` (sharp) rasterizes the app icon, adaptive icon
+  foreground/background, and splash PNGs into `assets/generated/`. The PNGs
+  are build output, not committed: the `prebuild` script runs
+  `generate-assets` first, and CI does the same.
 
 ## Observability (opt-in)
 
@@ -213,10 +213,10 @@ package name).
   `error.data`; UI dispatches on `problemTag`, never on text. Each screen shows
   the specific message for the codes it declares and a generic `ErrorState`
   otherwise.
-- Network / offline: TanStack Query `retry` stays default; `ErrorState` shows
-  a retry button; a `NetInfo`-free approach (no extra dependency): the error
-  state copy is generic, and the list keeps the last data with a banner while
-  refetching fails (`isError && data`).
+- Network / offline: no NetInfo dependency. TanStack Query `retry` stays at
+  its default; `ErrorState` shows a generic message with a retry button. When
+  a refetch fails but cached data exists (`isError && data`), the list keeps
+  the data and shows a banner instead.
 - 401 → refresh → still 401: `tokenStore` is invalidated, the auth gate
   redirects to login, a toast explains the session expired.
 - Root `ErrorBoundary` in `app/_layout.tsx` (Expo Router's `ErrorBoundary`
@@ -241,11 +241,11 @@ package name).
 
 Job `verify`: pnpm install (frozen), `typecheck`, `lint`, `format:check`,
 `test`, `expo prebuild --platform all --no-install` (config gate for both
-platforms), Android debug APK via Gradle (`expo run:android --no-bundler`
-equivalent through `./gradlew assembleDebug`), then Maestro `smoke.yml` on a
-GitHub-hosted emulator (`reactivecircus/android-emulator-runner`, API 34,
-x86_64, KVM). Expected ~10–12 minutes; the emulator step has
-`timeout-minutes` and `continue-on-error: false`.
+platforms), then a release APK via `./gradlew assembleRelease` signed with
+the debug keystore so the JS bundle is embedded and no Metro server is needed,
+then Maestro `smoke.yml` against it on a GitHub-hosted emulator
+(`reactivecircus/android-emulator-runner`, API 34, x86_64, KVM). Expected
+10–12 minutes; the emulator step has a `timeout-minutes` and is retried once.
 
 Job `init-project-shell`: run `scripts/init-project.mjs ci-shell`, assert
 LICENSE and README license section removed, then `typecheck`, `lint`, `test`,
@@ -286,9 +286,8 @@ CI proves the post-init shell builds and passes the smoke.
 
 ## Documentation
 
-`README.md` follows the web README's structure: hero-free (brand assets are
-referenced by raw URL from the org `.github` repo), the contract loop, quick
-start (Android emulator, `10.0.2.2`), the auth story, EAS profiles and OTA,
+`README.md` follows the web README's structure, with no hero image: the
+contract loop, quick start (Android emulator, `10.0.2.2`), the auth story, EAS profiles and OTA,
 deep links, observability, security notes (secure store, dev auth gated by
 `DEV_AUTH_ENABLED`, no CSP equivalent, pinned OTel packages), conventions,
 starting a real project, scripts table, license. Out-of-scope items each get a
@@ -307,7 +306,7 @@ the backend describing the pairing, like `docs/frontend.md`.
 | Temporal / oRPC on Hermes | Spike first; fallback documented before UI work |
 | NativeWind / Reanimated / Expo pin drift | Exact pins for the fragile trio; `expo install --fix` documented in the update section |
 | OTel JS SDK unsupported on RN | Exact pins; feature is opt-in and isolated in one module; Sentry named as swap |
-| GitHub emulator flakiness | Single short smoke flow, retries on the Maestro step only, EAS Workflows documented |
+| GitHub emulator flakiness | Single short smoke flow, the Maestro step retried once, EAS Workflows documented |
 | iOS unverified | Stated in README; prebuild + typecheck gate config errors |
 
 ## Appendix A — CLAUDE.md draft

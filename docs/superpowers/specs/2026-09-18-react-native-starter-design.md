@@ -143,7 +143,7 @@ in the plan before UI work starts.
 | Login | `/login` | Email field, react-hook-form + zod, `client.v1.auth.dev.post`, Problem-coded errors inline, keyboard-avoiding, submit on return key |
 | Auction list | `/` | FlashList, pull-to-refresh, skeleton on first load, `EmptyState` / `ErrorState` (retry), status badge, ends-in relative time via Temporal |
 | Auction detail | `/auctions/[id]` | Header, bids list, "Place bid" button opening a dialog with an amount field; `bid-too-low` typed error shown inline; success = haptic + toast + query invalidation |
-| Settings | `/settings` | Theme toggle, logged-in email, logout (calls `DELETE /v1/auth/sessions`), app + OTA version |
+| Settings | `/settings` | Theme toggle, logged-in email, logout (local: clears the token store, like the web — the contract's `DELETE /v1/auth/sessions` is keyed by a `user-agent` query the app cannot know reliably), app + OTA version |
 | Not found | `+not-found` | Link home |
 
 Native-feel checklist applied to every screen: `SafeAreaView` via the `Screen`
@@ -190,18 +190,14 @@ minimum tap targets, `accessibilityLabel` on icon-only buttons.
   Expo Go.
 - Assets: `assets/icon.svg` and `assets/splash.svg` are the sources;
   `scripts/generate-assets.mjs` (sharp) rasterizes the app icon, adaptive icon
-  foreground/background, and splash PNGs into `assets/generated/`. The PNGs
-  are build output, not committed, so **every** path that reaches a native
-  build must generate them first:
-  - `eas-build-post-install` in `package.json` — the hook EAS Build actually
-    runs, after dependency install and before it invokes `expo prebuild`
-    itself. A managed EAS build never runs our own scripts, so without this
-    hook a clean remote build fails on missing icon and splash files.
-  - the local `native:prebuild` script and the CI job, both of which call
-    `generate-assets` before `expo prebuild`.
-  The local script is named `native:prebuild`, not `prebuild`: npm and pnpm
-  treat a script called `prebuild` as the automatic pre-hook for `build`, so
-  the obvious name would fire at the wrong times.
+  foreground/background, and splash PNGs into `assets/generated/`. **The PNGs
+  are committed.** EAS Build's only usable hook, `eas-build-post-install`,
+  runs *after* `expo prebuild` on Android, so no hook can generate prebuild
+  inputs in time on a clean remote build. CI guards freshness instead: it
+  re-runs `generate-assets` and fails on a diff under `assets/generated/`.
+  The local prebuild script is named `native:prebuild`, not `prebuild`: npm
+  and pnpm treat a script called `prebuild` as the automatic pre-hook for
+  `build`, so the obvious name would fire at the wrong times.
 
 ## Observability (opt-in)
 
@@ -292,7 +288,7 @@ neither of which embeds a secret:
 ## CI (`.github/workflows/ci.yml`)
 
 Job `verify`: pnpm install (frozen), `typecheck`, `lint`, `format:check`,
-`test`, `generate-assets`, `expo prebuild --platform all --no-install` (config gate for both
+`test`, `generate-assets` + `git diff --exit-code assets/generated` (freshness), `expo prebuild --platform all --no-install` (config gate for both
 platforms), then a release APK via `./gradlew assembleRelease` signed with
 the debug keystore so the JS bundle is embedded and no Metro server is needed,
 then Maestro `smoke.yml` against it on a GitHub-hosted emulator
@@ -329,8 +325,7 @@ CI proves the post-init shell builds and passes the smoke.
 | `start` / `android` / `ios` | Expo dev server / run on emulator or simulator |
 | `typecheck` / `lint` / `format` / `test` | the gate |
 | `e2e` | `maestro test .maestro` against a running emulator |
-| `native:prebuild` | `generate-assets` then `expo prebuild --clean` (not named `prebuild`: npm would run it before `build`) |
-| `eas-build-post-install` | EAS Build's own hook; runs `generate-assets` so remote builds have icons |
+| `native:prebuild` | `expo prebuild --clean` (not named `prebuild`: npm would run it before `build`) |
 | `build:preview` / `build:production` | `eas build` with the profile |
 | `update:preview` / `update:production` | `eas update --channel …` |
 | `sync-contracts` | vendor the backend-generated contract |
@@ -362,7 +357,7 @@ the backend describing the pairing, like `docs/frontend.md`.
 | GitHub emulator flakiness | Single short smoke flow, the Maestro step retried once, EAS Workflows documented |
 | iOS unverified | Stated in README; prebuild + typecheck gate config errors |
 | Telemetry token is public by construction | Ingest-only scope, rotation documented, backend-forward option for anyone who needs secrecy |
-| EAS build misses generated assets | `eas-build-post-install` hook; a preview build is run before the template is called done |
+| Committed PNGs drift from their SVG sources | CI re-generates and fails on a diff |
 
 ## Appendix A — CLAUDE.md draft
 

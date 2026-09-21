@@ -95,9 +95,16 @@ Changed for mobile:
   Backing store is `expo-secure-store`. Reads are async, so the store keeps a
   synchronous in-memory mirror hydrated once at startup (`hydrate(): Promise<void>`,
   awaited in the root layout behind the splash screen), and writes go to the
-  mirror first, then the secure store. No cross-tab listener; instead an
-  `AppState` "active" transition re-reads the secure store so an OS-level
-  restore or another process's write is picked up.
+  mirror first, then the secure store.
+  **The mirror is authoritative after hydration and is never re-read from
+  disk.** The web's cross-tab `storage` listener exists because several tabs
+  share one origin; a mobile app is a single process and nothing else writes
+  the keychain entry, so there is nothing to sync back. Re-reading on an
+  `AppState` "active" transition was considered and rejected: an async read
+  started before a logout or a token rotation can land after it and restore a
+  spent single-use refresh token, which would invalidate a good session or
+  silently undo a logout. Writes are serialized through a promise chain so
+  two rapid rotations cannot land out of order.
 - **`useAuth`** additionally exposes `isHydrated` so the auth gate does not
   redirect to login before the token has been read.
 
@@ -169,23 +176,60 @@ minimum tap targets, `accessibilityLabel` on icon-only buttons.
   `package.json`, so `init-project` renaming the package re-brands the app,
   like the web manifest. `owner` and `projectId` are read from env so the
   template ships without an EAS project bound to it.
-- `src/updates/useOtaUpdates.ts`: `checkAutomatically: "ON_ERROR_RECOVERY"`
-  in config, then an explicit `checkForUpdateAsync` on launch and on
-  foreground (throttled to once per 5 minutes). A fetched update shows a
-  sonner-native toast with a **Reload** action calling `reloadAsync`. Never
-  applies silently; disabled in dev and in Expo Go.
+- `src/updates/useOtaUpdates.ts`: `checkAutomatically: "NEVER"` in config,
+  then an explicit `checkForUpdateAsync` on launch and on foreground
+  (throttled to once per 5 minutes). **Consent gates the download, not the
+  reload.** expo-updates launches any update that is already on disk at the
+  next cold start, so fetching first and prompting afterwards would apply the
+  update behind the user's back the next time they opened the app. The order
+  is therefore: check, show a sonner-native toast if an update exists, and
+  call `fetchUpdateAsync` followed by `reloadAsync` only when the user taps
+  **Update**. Declining downloads nothing, so the running and the next
+  session both stay on the current build. This is what makes it the real
+  counterpart of the web's `registerType: 'prompt'`. Disabled in dev and in
+  Expo Go.
 - Assets: `assets/icon.svg` and `assets/splash.svg` are the sources;
   `scripts/generate-assets.mjs` (sharp) rasterizes the app icon, adaptive icon
   foreground/background, and splash PNGs into `assets/generated/`. The PNGs
-  are build output, not committed: the `prebuild` script runs
-  `generate-assets` first, and CI does the same.
+  are build output, not committed, so **every** path that reaches a native
+  build must generate them first:
+  - `eas-build-post-install` in `package.json` — the hook EAS Build actually
+    runs, after dependency install and before it invokes `expo prebuild`
+    itself. A managed EAS build never runs our own scripts, so without this
+    hook a clean remote build fails on missing icon and splash files.
+  - the local `native:prebuild` script and the CI job, both of which call
+    `generate-assets` before `expo prebuild`.
+  The local script is named `native:prebuild`, not `prebuild`: npm and pnpm
+  treat a script called `prebuild` as the automatic pre-hook for `build`, so
+  the obvious name would fire at the wrong times.
 
 ## Observability (opt-in)
 
 `src/observability/otel.ts` is imported lazily from the root layout only when
-`EXPO_PUBLIC_OTEL_ENDPOINT` is set (plus `EXPO_PUBLIC_OTEL_HEADERS` for the
-OpenObserve auth header and `EXPO_PUBLIC_OTEL_SERVICE_NAME`, default the
-package name).
+`EXPO_PUBLIC_OTEL_ENDPOINT` is set (plus `EXPO_PUBLIC_OTEL_SERVICE_NAME`,
+default the package name).
+
+**No credential ever goes in an `EXPO_PUBLIC_*` variable.** Expo inlines those
+into the JS bundle at build time, and a shipped `.apk` or `.ipa` is a
+downloadable archive, so anything in one is public and cannot be revoked per
+user. That rules out an OpenObserve Basic-auth header, which is an account
+credential with read access — a strictly worse exposure than the web's
+`VITE_OPENOBSERVE_RUM_CLIENT_TOKEN`, which is a purpose-built write-only RUM
+ingestion token meant to sit in a browser bundle. Two supported endpoints,
+neither of which embeds a secret:
+
+- **Default — ingest-only token.** `EXPO_PUBLIC_OTEL_INGEST_TOKEN` holds an
+  OpenObserve token scoped to write into one stream, with no read and no admin
+  rights, exactly the class of credential the web already ships. The README
+  states plainly that it is public, that it must not be an account password,
+  and how to rotate it. The blast radius of a leak is junk telemetry in one
+  stream.
+- **Hardened — backend forward.** Point `EXPO_PUBLIC_OTEL_ENDPOINT` at the
+  backend and let it forward to OpenObserve with server-side credentials,
+  reusing the bearer token the app already sends. The app needs no telemetry
+  credential at all and unauthenticated spam is rejected. This needs a
+  collector route in the Scala repo, so it is documented here and listed as a
+  backend follow-up, not built in this one.
 
 - `WebTracerProvider` from `@opentelemetry/sdk-trace-web`, resource with
   service name / version, OS name+version, device model
@@ -217,18 +261,26 @@ package name).
   its default; `ErrorState` shows a generic message with a retry button. When
   a refetch fails but cached data exists (`isError && data`), the list keeps
   the data and shows a banner instead.
-- 401 → refresh → still 401: `tokenStore` is invalidated, the auth gate
-  redirects to login, a toast explains the session expired.
+- **Session expiry**: `authFetch` is copied unchanged, so the behaviour is
+  the web's and the spec must describe it exactly. A 401 triggers one
+  single-flight refresh. If the *refresh call* is rejected (401/403), the
+  provider is invalidated, the store is cleared, the auth gate redirects to
+  login, and a toast explains the session expired. If the refresh succeeds but
+  the *retried original request* still returns 401, the session is deliberately
+  **not** dropped: a fresh JWT rejected by one route is a per-resource
+  authorization failure, not an expired session, and it surfaces as a normal
+  Problem to the screen. Invalidating there would log users out on a single
+  unlucky endpoint. A test covers both branches.
 - Root `ErrorBoundary` in `app/_layout.tsx` (Expo Router's `ErrorBoundary`
   export) with a Reload action.
 
 ## Testing
 
 - **Unit** (`jest-expo`, RNTL, `msw/node`): `authFetch` refresh race (ported
-  test), `tokenStore` hydration + AppState re-read, `LoginScreen` (validation,
+  test) plus both expiry branches (refresh rejected → invalidated; retry 401 → session kept), `tokenStore` hydration, write serialization, and that no disk read follows hydration, `LoginScreen` (validation,
   Problem display, navigation), `AuctionListScreen` and `AuctionDetailScreen`
   against typed MSW handlers (list, empty, error, bid too low), `useOtaUpdates`
-  (shows toast on fetched update, throttles), `otel` init is a no-op without
+  (prompts before fetching, downloads nothing when declined, throttles), `otel` init is a no-op without
   the env var. Handlers typed against the contract as on the web.
 - **Maestro**: `.maestro/smoke.yml` launches the app and asserts the login
   screen (backend-free, survives init-project). `.maestro/auctions.yml` logs
@@ -240,7 +292,7 @@ package name).
 ## CI (`.github/workflows/ci.yml`)
 
 Job `verify`: pnpm install (frozen), `typecheck`, `lint`, `format:check`,
-`test`, `expo prebuild --platform all --no-install` (config gate for both
+`test`, `generate-assets`, `expo prebuild --platform all --no-install` (config gate for both
 platforms), then a release APK via `./gradlew assembleRelease` signed with
 the debug keystore so the JS bundle is embedded and no Metro server is needed,
 then Maestro `smoke.yml` against it on a GitHub-hosted emulator
@@ -277,7 +329,8 @@ CI proves the post-init shell builds and passes the smoke.
 | `start` / `android` / `ios` | Expo dev server / run on emulator or simulator |
 | `typecheck` / `lint` / `format` / `test` | the gate |
 | `e2e` | `maestro test .maestro` against a running emulator |
-| `prebuild` | `expo prebuild --clean` |
+| `native:prebuild` | `generate-assets` then `expo prebuild --clean` (not named `prebuild`: npm would run it before `build`) |
+| `eas-build-post-install` | EAS Build's own hook; runs `generate-assets` so remote builds have icons |
 | `build:preview` / `build:production` | `eas build` with the profile |
 | `update:preview` / `update:production` | `eas update --channel …` |
 | `sync-contracts` | vendor the backend-generated contract |
@@ -308,6 +361,8 @@ the backend describing the pairing, like `docs/frontend.md`.
 | OTel JS SDK unsupported on RN | Exact pins; feature is opt-in and isolated in one module; Sentry named as swap |
 | GitHub emulator flakiness | Single short smoke flow, the Maestro step retried once, EAS Workflows documented |
 | iOS unverified | Stated in README; prebuild + typecheck gate config errors |
+| Telemetry token is public by construction | Ingest-only scope, rotation documented, backend-forward option for anyone who needs secrecy |
+| EAS build misses generated assets | `eas-build-post-install` hook; a preview build is run before the template is called done |
 
 ## Appendix A — CLAUDE.md draft
 

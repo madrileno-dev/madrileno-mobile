@@ -79,7 +79,7 @@ Set `"main": "expo-router/entry"` in `package.json`.
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "routes:types": "expo export --platform android --output-dir .expo/typegen",
+    "routes:types": "expo customize tsconfig.json && node -e \"require('node:fs').accessSync('.expo/types/router.d.ts')\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -370,7 +370,7 @@ Object.assign(globalThis, { fetch: undiciFetch, Headers, Request, Response })
 
 - [ ] **Step 7: Generate typed routes, then typecheck, lint, format**
 
-Typed routes live in `.expo/types/router.d.ts`, which is untracked and written only when the bundler runs. `routes:types` runs a throwaway export into the gitignored `.expo/` so the types exist before `tsc`; CI runs the same script (Task 13).
+Typed routes live in `.expo/types/router.d.ts`, which is untracked and written by the CLI's type-generation service. In Expo CLI 57 only the dev server and `expo customize tsconfig.json` start that service; `expo export` does not. With a file argument `customize` runs non-interactively, leaves an existing `tsconfig.json` alone apart from adding a missing `extends`, and awaits the write, so `routes:types` calls it and then asserts the declaration file exists before `tsc` can run. CI runs the same script (Task 13).
 
 ```bash
 pnpm run routes:types
@@ -4069,7 +4069,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # .expo/types/router.d.ts is untracked; generate it or typecheck sees no route types.
+      # .expo/types/router.d.ts is untracked; `expo customize tsconfig.json` is the
+      # documented CI way to generate it, and the script asserts the file exists.
       - run: pnpm run routes:types
       # The contract is vendored (src/contracts), so CI needs no backend.
       - run: pnpm run typecheck
@@ -4222,7 +4223,7 @@ Write it in the web README's voice with these sections, in order. Each bullet is
 10. **Conventions.** Types from the contract; typed errors by code; Temporal not Date; feature folders; `app/` is wiring only; tokens not colors.
 11. **Starting a real project.** `node scripts/init-project.mjs my-project`; what it removes; `pnpm run native:prebuild` afterwards because the bundle ids follow the name.
 12. **Out of scope, and how to add each.** Push notifications (`expo-notifications` plus a device-token endpoint in the backend); offline persistence (`@tanstack/query-persist-client-core` with MMKV); iOS verification (a Mac or EAS cloud builds plus TestFlight).
-13. **Scripts.** A table with every script in `package.json`, including `routes:types` and why CI and fresh clones need it before `typecheck`.
+13. **Scripts.** A table with every script in `package.json`, including `routes:types` (`expo customize tsconfig.json`, the only non-dev-server path that generates route types) and why CI and fresh clones need it before `typecheck`.
 14. **License.** The web README's wording. It must stay the last `## ` section so `init-project` can strip it.
 
 `docs/deep-links.md`: the `assetlinks.json` and `apple-app-site-association` templates with the bundle id placeholder `dev.<scheme>.mobile`, where each is served (`/.well-known/`), the SHA-256 fingerprint command for Android, and the `adb` / `xcrun simctl openurl` test commands.
@@ -4240,6 +4241,7 @@ git commit -m "README, CLAUDE.md, LICENSE, deep-link docs"
 
 ## Self-review notes
 
+- **Fourth review pass (2026-09-21).** `routes:types` switched from `expo export` (which never starts the type-generation service in CLI 57) to `expo customize tsconfig.json`, verified against the CLI source, plus an existence assertion on the generated file (T1, T13).
 - **Third review pass (2026-09-21).** Five more findings verified and folded in: safe-area jest mock uses its `default` export and no bare `require` under typed lint (T4, T5, T6); `Field` signals errors with `accessibilityHint` and an `alert` live region instead of a non-existent `invalid` state (T4, T5, T7); `pnpm install` precedes the first `pnpm expo` call (T1); `returnTo` stores a typed `Href` with the one documented cast (T5); `routes:types` generates route declarations before `typecheck` locally and in both CI jobs (T1, T12, T13).
 - **Second review pass (2026-09-21).** Ten findings from an external review were verified and folded in: typed ESLint rules scoped to TS (T1); explicit scaffold package name (T1); jest mock factories with factory-local state and `mock`-prefixed captures (T3, T5, T7, T8); RNTL 14 async `render`/`fireEvent` awaited everywhere (T4–T8); safe-area jest mock (T4); `Field` validity by context with `FieldInput` (T4, T5, T7); hydration failure falls back to logged-out (T3); offset-paged infinite list with an end-reached test (T6); zod 4 `z.coerce.number<string>()` (T7); OTA accept path reports failure and offers retry (T9); `init-project` rewrites the Maestro `appId` (T12).
 

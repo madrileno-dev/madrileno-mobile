@@ -49,10 +49,12 @@ rsync -a --exclude .git madrileno-mobile-scaffold/ madrileno-mobile/
 rm -rf madrileno-mobile-scaffold
 cd madrileno-mobile
 rm App.tsx index.ts
+sed -i 's/"name": "madrileno-mobile-scaffold"/"name": "madrileno-mobile"/' package.json
+grep '"name"' package.json
 git status --short | head
 ```
 
-Expected: `package.json`, `app.json`, `tsconfig.json`, `assets/`, `.gitignore` appear untracked.
+Expected: `"name": "madrileno-mobile"` (Task 9 derives the app name, slug, scheme and bundle id from it, so the scaffold's name must not leak through), and `package.json`, `app.json`, `tsconfig.json`, `assets/`, `.gitignore` appear untracked.
 
 - [ ] **Step 2: Install the base dependency set**
 
@@ -179,10 +181,12 @@ module.exports = defineConfig([
     ignores: ['node_modules', 'android', 'ios', '.expo', 'dist', 'src/contracts', 'assets/generated'],
   },
   expoConfig,
-  ...tseslint.configs.recommendedTypeChecked,
   prettier,
   {
+    // Typed rules only where type information exists. Applied globally they
+    // abort on babel.config.js and friends with a parserOptions.project error.
     files: ['**/*.{ts,tsx}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: __dirname },
     },
@@ -206,7 +210,7 @@ module.exports = defineConfig([
     rules: { 'no-restricted-globals': 'off' },
   },
   { files: ['src/components/ui/**/*.tsx'], rules: { 'react/display-name': 'off' } },
-  { files: ['**/*.{js,mjs,cjs}'], extends: [prettier] },
+  { files: ['**/*.{js,mjs,cjs}'], extends: [tseslint.configs.disableTypeChecked, prettier] },
 ])
 ```
 
@@ -721,19 +725,29 @@ pnpm expo install expo-secure-store
 Add to `test/setup.ts` above the MSW hooks:
 
 ```ts
-// In-memory stand-in for the keychain so tests can inspect and reset it.
-export const secureStoreMock = new Map<string, string>()
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn((key: string) => Promise.resolve(secureStoreMock.get(key) ?? null)),
-  setItemAsync: jest.fn((key: string, value: string) => {
-    secureStoreMock.set(key, value)
-    return Promise.resolve()
-  }),
-  deleteItemAsync: jest.fn((key: string) => {
-    secureStoreMock.delete(key)
-    return Promise.resolve()
-  }),
-}))
+// In-memory stand-in for the keychain. The state lives INSIDE the factory:
+// jest hoists jest.mock() above the imports, so a module-level Map referenced
+// from the factory would still be in its temporal dead zone when the first
+// import (tokenStore → expo-secure-store) evaluates the mock. Only `mock`-prefixed
+// variables may be captured, and even those must be initialised lazily.
+jest.mock('expo-secure-store', () => {
+  const store = new Map<string, string>()
+  return {
+    __store: store,
+    getItemAsync: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+    setItemAsync: jest.fn((key: string, value: string) => {
+      store.set(key, value)
+      return Promise.resolve()
+    }),
+    deleteItemAsync: jest.fn((key: string) => {
+      store.delete(key)
+      return Promise.resolve()
+    }),
+  }
+})
+export const secureStoreMock = (
+  jest.requireMock('expo-secure-store') as { __store: Map<string, string> }
+).__store
 ```
 
 and in `afterEach`, after `server.resetHandlers()`: `secureStoreMock.clear()`.
@@ -785,11 +799,13 @@ describe('tokenStore', () => {
 
   it('serializes writes so a fast rotation followed by logout lands in order', async () => {
     const calls: string[] = []
-    jest.mocked(SecureStore.setItemAsync).mockImplementation(async (_k, v) => {
+    const slowSet = async (_k: string, v: string) => {
       await new Promise((r) => setTimeout(r, 10))
       calls.push(`set:${v}`)
-    })
-    jest.mocked(SecureStore.deleteItemAsync).mockImplementation(async () => {
+    }
+    // One-shot implementations: a persistent override would leak into later tests.
+    jest.mocked(SecureStore.setItemAsync).mockImplementationOnce(slowSet).mockImplementationOnce(slowSet)
+    jest.mocked(SecureStore.deleteItemAsync).mockImplementationOnce(async () => {
       calls.push('delete')
     })
     tokenStore.set(tokens)
@@ -811,6 +827,13 @@ describe('tokenStore', () => {
     await tokenStore.flush()
     tokenStore.get()
     expect(jest.mocked(SecureStore.getItemAsync).mock.calls.length).toBe(readsAfterHydrate)
+  })
+
+  it('treats a failed keychain read as logged out and still reports hydrated', async () => {
+    jest.mocked(SecureStore.getItemAsync).mockRejectedValueOnce(new Error('keychain locked'))
+    await tokenStore.hydrate()
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.isHydrated()).toBe(true)
   })
 
   it('notifies subscribers on every change', () => {
@@ -883,7 +906,13 @@ export const tokenStore = {
   get: (): Tokens | null => current,
   isHydrated: (): boolean => hydrated,
   hydrate: async (): Promise<void> => {
-    current = parse(await SecureStore.getItemAsync(STORAGE_KEY))
+    try {
+      current = parse(await SecureStore.getItemAsync(STORAGE_KEY))
+    } catch {
+      // A locked or corrupt keychain must not strand the app behind a null
+      // layout: start logged out and let the user log in again.
+      current = null
+    }
     hydrated = true
     listeners.forEach((listener) => listener())
   },
@@ -936,7 +965,7 @@ export function useAuth(): { tokens: Tokens | null; isHydrated: boolean; logout:
 - [ ] **Step 5: Run the tests**
 
 Run: `pnpm test -- test/features/auth`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 - [ ] **Step 6: Switch the auth-fetch test to the real store**
 
@@ -981,7 +1010,7 @@ git commit -m "Token store on expo-secure-store with an authoritative in-memory 
 - Test: `test/theme/preferences.test.ts`, `test/components/Field.test.tsx`
 
 **Interfaces:**
-- Produces: `cn(...inputs: ClassValue[]): string`; `Screen({ children, scroll?, form?, className? })`; `Field({ invalid?, className?, children })`, `FieldLabel({ children })`, `FieldError({ children })`; `EmptyState({ title, body? })` (testID `empty-state`); `ErrorState({ message, onRetry? })` (testID `error-state`, uses `error.retry`); `type ThemePreference = 'light' | 'dark' | 'system'`; `readThemePreference(): ThemePreference`; `writeThemePreference(p): void`; `useThemePreference(): { preference, setPreference, resolved: 'light' | 'dark' }`; `ThemeProvider({ children })`.
+- Produces: `cn(...inputs: ClassValue[]): string`; `Screen({ children, scroll?, form?, className? })`; `Field({ invalid?, className?, children })` (provides validity through context), `FieldLabel({ children })`, `FieldError({ children })`, `FieldInput(props of Input)` (an `Input` that reads the Field's validity and sets `accessibilityState.invalid`), `useFieldInvalid(): boolean`; `EmptyState({ title, body? })` (testID `empty-state`); `ErrorState({ message, onRetry? })` (testID `error-state`, uses `error.retry`); `type ThemePreference = 'light' | 'dark' | 'system'`; `readThemePreference(): ThemePreference`; `writeThemePreference(p): void`; `useThemePreference(): { preference, setPreference, resolved: 'light' | 'dark' }`; `ThemeProvider({ children })`.
 
 - [ ] **Step 1: Install NativeWind and reusables**
 
@@ -1273,49 +1302,68 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 - [ ] **Step 7: Shell components — failing Field test first**
 
-`test/components/Field.test.tsx`:
+The `Screen` wrapper reads safe-area insets and the hook throws without a provider, so mock the library in `test/setup.ts` with the mock it ships:
+
+```ts
+jest.mock('react-native-safe-area-context', () =>
+  require('react-native-safe-area-context/jest/mock'),
+)
+```
+
+`test/components/Field.test.tsx` — tests the real composition (a react-hook-form `Controller` between `Field` and the input), because that is how every form in the app uses it:
 
 ```tsx
 import { render, screen } from '@testing-library/react-native'
-import { Text } from 'react-native'
-import { Field, FieldError, FieldLabel } from '@/components/Field'
-import { Input } from '@/components/ui/input'
+import { Controller, useForm } from 'react-hook-form'
+import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
+
+function EmailField({ invalid }: { invalid: boolean }) {
+  const { control } = useForm<{ email: string }>({ defaultValues: { email: '' } })
+  return (
+    <Field invalid={invalid}>
+      <FieldLabel>Email</FieldLabel>
+      <Controller
+        control={control}
+        name="email"
+        render={({ field }) => (
+          <FieldInput testID="email" value={field.value} onChangeText={field.onChange} />
+        )}
+      />
+      {invalid && <FieldError>Required</FieldError>}
+    </Field>
+  )
+}
 
 describe('Field', () => {
-  it('renders label, control and error, and marks the control invalid', () => {
-    render(
-      <Field invalid>
-        <FieldLabel>Email</FieldLabel>
-        <Input testID="email" />
-        <FieldError>Required</FieldError>
-      </Field>,
-    )
+  it('marks the control invalid through the Controller and shows the error', async () => {
+    await render(<EmailField invalid />)
     expect(screen.getByText('Email')).toBeTruthy()
     expect(screen.getByText('Required')).toBeTruthy()
     expect(screen.getByTestId('email').props.accessibilityState).toEqual({ invalid: true })
   })
 
-  it('renders no error slot when valid', () => {
-    render(
-      <Field>
-        <FieldLabel>Email</FieldLabel>
-        <Text>ctl</Text>
-      </Field>,
-    )
+  it('marks the control valid and renders no error slot', async () => {
+    await render(<EmailField invalid={false} />)
+    expect(screen.getByTestId('email').props.accessibilityState).toEqual({ invalid: false })
     expect(screen.queryByTestId('field-error')).toBeNull()
   })
 })
 ```
 
+(RNTL 14: `render` and every `fireEvent` call return promises and must be awaited. Every test in this plan does so.)
+
 Run: `pnpm test -- test/components` → FAIL, module not found.
 
-`src/components/Field.tsx`:
+`src/components/Field.tsx` — validity travels by context, not by cloning: the immediate child is usually a `Controller`, which would swallow a cloned prop instead of forwarding it to the input.
 
 ```tsx
-import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react'
 import { View } from 'react-native'
+import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { cn } from '@/lib/utils'
+
+const FieldContext = createContext<{ invalid: boolean }>({ invalid: false })
 
 interface FieldProps {
   invalid?: boolean
@@ -1323,23 +1371,21 @@ interface FieldProps {
   children: ReactNode
 }
 
-type ControlProps = { accessibilityState?: Record<string, boolean> }
-
-// Mirrors the web's Field composition: the wrapper knows validity and marks
-// every child that is not the label or the error with accessibilityState.invalid.
 export function Field({ invalid = false, className, children }: FieldProps) {
   return (
-    <View className={cn('gap-1.5', className)}>
-      {Children.map(children, (child) => {
-        if (!isValidElement(child)) return child
-        if (child.type === FieldLabel || child.type === FieldError) return child
-        const control = child as ReactElement<ControlProps>
-        return cloneElement(control, {
-          accessibilityState: { ...control.props.accessibilityState, invalid },
-        })
-      })}
-    </View>
+    <FieldContext.Provider value={{ invalid }}>
+      <View className={cn('gap-1.5', className)}>{children}</View>
+    </FieldContext.Provider>
   )
+}
+
+export function useFieldInvalid(): boolean {
+  return useContext(FieldContext).invalid
+}
+
+export function FieldInput(props: ComponentProps<typeof Input>) {
+  const invalid = useFieldInvalid()
+  return <Input {...props} accessibilityState={{ ...props.accessibilityState, invalid }} />
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
@@ -1522,7 +1568,7 @@ git commit -m "NativeWind, react-native-reusables primitives, theme tokens and s
 
 **Interfaces:**
 - Consumes: `tokenStore`, `useAuth`, `registerAuthTokenProvider`, `client`, `problemFrom`, `Field`/`FieldLabel`/`FieldError`, `Screen`.
-- Produces: `messages` (typed `en.json`); `LocaleProvider`; `setReturnTo(href: string): void`, `consumeReturnTo(): string | null`; `LoginScreen` (testIDs `login-email`, `login-submit`); `HomeScreen`; test helpers `renderWithProviders(ui: ReactElement)` and `routerMock = { push, replace, back }`.
+- Produces: `messages` (typed `en.json`); `LocaleProvider`; `setReturnTo(href: string): void`, `consumeReturnTo(): string | null`; `LoginScreen` (testIDs `login-email`, `login-submit`); `HomeScreen`; test helpers `renderWithProviders(ui: ReactElement)` and `mockRouter = { push, replace, back }`.
 
 - [ ] **Step 1: Messages and provider**
 
@@ -1572,7 +1618,9 @@ git commit -m "NativeWind, react-native-reusables primitives, theme tokens and s
   },
   "updates": {
     "available": "A new version is available.",
-    "update": "Update"
+    "update": "Update",
+    "failed": "Couldn’t download the update.",
+    "retry": "Try again"
   },
   "auction": {
     "listTitle": "Auctions",
@@ -1652,14 +1700,14 @@ export function renderWithProviders(ui: ReactElement) {
 }
 ```
 
-Add an `expo-router` mock to `test/setup.ts` so screens can call `useRouter` without a navigator:
+Add an `expo-router` mock to `test/setup.ts` so screens can call `useRouter` without a navigator. The variable is `mock`-prefixed because jest's hoisting plugin only lets a factory capture variables with that prefix:
 
 ```ts
-export const routerMock = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
+export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
 jest.mock('expo-router', () => {
   const React = require('react') as typeof import('react')
   return {
-    useRouter: () => routerMock,
+    useRouter: () => mockRouter,
     useLocalSearchParams: () => ({}),
     usePathname: () => '/',
     Link: ({ children }: { children: React.ReactNode }) => children,
@@ -1669,7 +1717,7 @@ jest.mock('expo-router', () => {
 })
 ```
 
-and in `afterEach`: `routerMock.push.mockClear(); routerMock.replace.mockClear(); routerMock.back.mockClear()`.
+and in `afterEach`: `mockRouter.push.mockClear(); mockRouter.replace.mockClear(); mockRouter.back.mockClear()`.
 
 - [ ] **Step 3: returnTo — failing test first**
 
@@ -1727,19 +1775,19 @@ import { LoginScreen } from '@/features/auth/screens/LoginScreen'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from '../../mswServer'
 import { renderWithProviders } from '../../renderApp'
-import { routerMock } from '../../setup'
+import { mockRouter } from '../../setup'
 
 const BASE = 'http://10.0.2.2:9000'
 
-function submit(email: string) {
-  fireEvent.changeText(screen.getByTestId('login-email'), email)
-  fireEvent.press(screen.getByTestId('login-submit'))
+async function submit(email: string) {
+  await fireEvent.changeText(screen.getByTestId('login-email'), email)
+  await fireEvent.press(screen.getByTestId('login-submit'))
 }
 
 describe('LoginScreen', () => {
   it('validates the email before calling the API', async () => {
-    renderWithProviders(<LoginScreen />)
-    submit('nope')
+    await renderWithProviders(<LoginScreen />)
+    await submit('nope')
     expect(await screen.findByText('Enter a valid email address')).toBeTruthy()
   })
 
@@ -1749,11 +1797,11 @@ describe('LoginScreen', () => {
         HttpResponse.json({ jwt: 'j', refreshToken: 'r', userCreated: true }),
       ),
     )
-    renderWithProviders(<LoginScreen />)
-    submit('a@example.com')
+    await renderWithProviders(<LoginScreen />)
+    await submit('a@example.com')
     await waitFor(() => expect(tokenStore.get()?.jwt).toBe('j'))
     expect(tokenStore.get()?.email).toBe('a@example.com')
-    expect(routerMock.replace).toHaveBeenCalledWith('/')
+    expect(mockRouter.replace).toHaveBeenCalledWith('/')
   })
 
   it('continues to the deep-linked screen after login', async () => {
@@ -1763,9 +1811,9 @@ describe('LoginScreen', () => {
         HttpResponse.json({ jwt: 'j', refreshToken: 'r', userCreated: false }),
       ),
     )
-    renderWithProviders(<LoginScreen />)
-    submit('a@example.com')
-    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/auctions/abc'))
+    await renderWithProviders(<LoginScreen />)
+    await submit('a@example.com')
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/auctions/abc'))
   })
 
   it('shows the Problem title when the backend rejects', async () => {
@@ -1777,8 +1825,8 @@ describe('LoginScreen', () => {
         ),
       ),
     )
-    renderWithProviders(<LoginScreen />)
-    submit('a@example.com')
+    await renderWithProviders(<LoginScreen />)
+    await submit('a@example.com')
     expect(await screen.findByText('Dev auth is off')).toBeTruthy()
     expect(tokenStore.get()).toBeNull()
   })
@@ -1799,10 +1847,9 @@ import { useTranslations } from 'use-intl'
 import { z } from 'zod'
 import { client } from '@/api/orpc'
 import { problemFrom, type Problem } from '@/api/problem'
-import { Field, FieldError, FieldLabel } from '@/components/Field'
+import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
 import { Screen } from '@/components/Screen'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { consumeReturnTo } from '@/features/auth/returnTo'
 import { tokenStore } from '@/features/auth/tokenStore'
@@ -1845,7 +1892,7 @@ export function LoginScreen() {
           control={control}
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
-            <Input
+            <FieldInput
               testID="login-email"
               accessibilityLabel={t('emailLabel')}
               autoCapitalize="none"
@@ -2055,7 +2102,7 @@ git commit -m "i18n, dev login screen, auth-gated route groups, hydration behind
 
 **Interfaces:**
 - Consumes: `orpc`, `ApiClient`, `useInstantFormatter`, `EmptyState`, `ErrorState`, `Screen`, `Card*`, `Badge`, `Text`, `Skeleton`.
-- Produces: `useAuctionsPage(offset)`, `useAuction(id)`, `useBids(id)`, `usePlaceBid(id)`, types `AuctionsPage`, `AuctionSummary`, `Auction`, `BidsPage`, `PAGE_SIZE`, `BIDS_PAGE_SIZE`; `usePriceFormatter()`, `useAuctionStatusLabel()`; `AuctionListScreen`; fixtures `BASE`, `AUCTION_ID`, `auctionFixture`, `auctionsPageFixture`, `bidsPageFixture(ids, hasMore, offset?)`, `bidTooLowProblem`, `listHandler`, `detailHandler`.
+- Produces: `useAuctionsInfinite()`, `useAuction(id)`, `useBids(id)`, `usePlaceBid(id)`, types `AuctionsPage`, `AuctionSummary`, `Auction`, `BidsPage`, `PAGE_SIZE`, `BIDS_PAGE_SIZE`; `usePriceFormatter()`, `useAuctionStatusLabel()`; `AuctionListScreen`; fixtures `BASE`, `AUCTION_ID`, `auctionFixture`, `auctionsPageFixture`, `bidsPageFixture(ids, hasMore, offset?)`, `bidTooLowProblem`, `listHandler`, `detailHandler`.
 
 - [ ] **Step 1: Install FlashList and haptics; copy format and status; write queries**
 
@@ -2068,13 +2115,7 @@ cp ../madrileno-frontend/src/features/auctions/status.ts src/features/auctions/s
 `src/features/auctions/queries.ts` (the web file minus the SSR prefetch helper):
 
 ```ts
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { orpc, type ApiClient } from '@/api/orpc'
 
 export type AuctionsPage = Awaited<ReturnType<ApiClient['v1']['auctions']['get']>>
@@ -2091,11 +2132,18 @@ const auctionsRoute = orpc.v1.auctions
 const auctionRoute = orpc.v1.auctions.byAuctionId
 const bidsRoute = orpc.v1.auctions.byAuctionId.bids
 
-export function useAuctionsPage(offset: number) {
-  return useQuery(
-    auctionsRoute.get.queryOptions({
-      input: { query: { limit: PAGE_SIZE, offset } },
-      placeholderData: keepPreviousData,
+// Offset-paged on the wire, infinite in the UI: the next offset is derived
+// from the page just received, and the list fetches it on end-reached. The
+// web's prev/next pager has no place on a phone.
+export function useAuctionsInfinite() {
+  return useInfiniteQuery(
+    auctionsRoute.get.infiniteOptions({
+      input: (pageParam: number) => ({ query: { limit: PAGE_SIZE, offset: pageParam } }),
+      initialPageParam: 0,
+      getNextPageParam: (last) => {
+        const next = last.offset + last.items.length
+        return next < last.total ? next : undefined
+      },
     }),
   )
 }
@@ -2159,18 +2207,19 @@ export const detailHandler = http.get(`${BASE}/v1/auctions/${AUCTION_ID}`, () =>
 `test/features/auctions/AuctionListScreen.test.tsx`:
 
 ```tsx
-import { fireEvent, screen } from '@testing-library/react-native'
+import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { http, HttpResponse } from 'msw'
+import { PAGE_SIZE } from '@/features/auctions/queries'
 import { AuctionListScreen } from '@/features/auctions/screens/AuctionListScreen'
 import { server } from '../../mswServer'
 import { renderWithProviders } from '../../renderApp'
-import { routerMock } from '../../setup'
-import { AUCTION_ID, BASE, auctionsPageFixture, listHandler } from './mocks'
+import { mockRouter } from '../../setup'
+import { AUCTION_ID, BASE, auctionFixture, auctionsPageFixture, listHandler } from './mocks'
 
 describe('AuctionListScreen', () => {
   it('renders auctions with price and status', async () => {
     server.use(listHandler)
-    renderWithProviders(<AuctionListScreen />)
+    await renderWithProviders(<AuctionListScreen />)
     expect(await screen.findByText('Château Margaux 2015')).toBeTruthy()
     expect(screen.getByText('€150.00')).toBeTruthy()
     expect(screen.getByText('Open')).toBeTruthy()
@@ -2178,9 +2227,36 @@ describe('AuctionListScreen', () => {
 
   it('navigates to the detail on tap', async () => {
     server.use(listHandler)
-    renderWithProviders(<AuctionListScreen />)
-    fireEvent.press(await screen.findByTestId(`auction-${AUCTION_ID}`))
-    expect(routerMock.push).toHaveBeenCalledWith(`/auctions/${AUCTION_ID}`)
+    await renderWithProviders(<AuctionListScreen />)
+    await fireEvent.press(await screen.findByTestId(`auction-${AUCTION_ID}`))
+    expect(mockRouter.push).toHaveBeenCalledWith(`/auctions/${AUCTION_ID}`)
+  })
+
+  it('fetches the next page when the end of the list is reached', async () => {
+    const items = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => ({
+      ...auctionFixture,
+      id: `${AUCTION_ID.slice(0, -2)}${i.toString(16).padStart(2, '0')}`,
+      wineName: `Wine ${String(i)}`,
+    }))
+    const requestedOffsets: number[] = []
+    server.use(
+      http.get(`${BASE}/v1/auctions`, ({ request }) => {
+        const offset = Number(new URL(request.url).searchParams.get('offset') ?? '0')
+        requestedOffsets.push(offset)
+        return HttpResponse.json({
+          items: items.slice(offset, offset + PAGE_SIZE),
+          limit: PAGE_SIZE,
+          offset,
+          total: items.length,
+        })
+      }),
+    )
+    await renderWithProviders(<AuctionListScreen />)
+    expect(await screen.findByText('Wine 0')).toBeTruthy()
+    expect(requestedOffsets).toEqual([0])
+    // Virtualised lists render a window, so assert on the request, not on item 21.
+    await fireEvent(screen.getByTestId('auction-list'), 'onEndReached')
+    await waitFor(() => expect(requestedOffsets).toEqual([0, PAGE_SIZE]))
   })
 
   it('shows the empty state', async () => {
@@ -2189,13 +2265,13 @@ describe('AuctionListScreen', () => {
         HttpResponse.json({ ...auctionsPageFixture, items: [], total: 0 }),
       ),
     )
-    renderWithProviders(<AuctionListScreen />)
+    await renderWithProviders(<AuctionListScreen />)
     expect(await screen.findByTestId('empty-state')).toBeTruthy()
   })
 
   it('shows the error state with retry when the API fails', async () => {
     server.use(http.get(`${BASE}/v1/auctions`, () => HttpResponse.error()))
-    renderWithProviders(<AuctionListScreen />)
+    await renderWithProviders(<AuctionListScreen />)
     expect(await screen.findByTestId('error-state')).toBeTruthy()
     expect(screen.getByText('Try again')).toBeTruthy()
   })
@@ -2272,7 +2348,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { Screen } from '@/components/Screen'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
-import { useAuctionsPage } from '@/features/auctions/queries'
+import { useAuctionsInfinite } from '@/features/auctions/queries'
 import { AuctionCard } from './AuctionCard'
 
 function ListSkeleton() {
@@ -2287,7 +2363,16 @@ function ListSkeleton() {
 
 export function AuctionListScreen() {
   const t = useTranslations('auction')
-  const { data, isPending, isError, isFetching, refetch } = useAuctionsPage(0)
+  const {
+    data,
+    isPending,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useAuctionsInfinite()
 
   if (isPending) return <ListSkeleton />
   if (data === undefined) {
@@ -2298,6 +2383,7 @@ export function AuctionListScreen() {
     )
   }
 
+  const items = data.pages.flatMap((page) => page.items)
   return (
     <View className="flex-1 bg-background">
       {isError && (
@@ -2306,14 +2392,22 @@ export function AuctionListScreen() {
         </View>
       )}
       <FlashList
-        data={data.items}
+        testID="auction-list"
+        data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <AuctionCard auction={item} />}
         ItemSeparatorComponent={() => <View className="h-4" />}
         contentContainerStyle={{ padding: 16 }}
         contentInsetAdjustmentBehavior="automatic"
-        refreshing={isFetching}
+        refreshing={isFetching && !isFetchingNextPage}
         onRefresh={() => void refetch()}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) void fetchNextPage()
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? <Skeleton className="mt-4 h-28 w-full rounded-lg" /> : null
+        }
         ListEmptyComponent={<EmptyState title={t('empty')} body={t('emptyBody')} />}
       />
     </View>
@@ -2366,7 +2460,7 @@ export default function AppLayout() {
 
 - [ ] **Step 5: Tests, emulator, commit**
 
-Run: `pnpm test -- AuctionListScreen` → PASS, 4 tests. If FlashList renders nothing under Jest, add to `test/setup.ts`:
+Run: `pnpm test -- AuctionListScreen` → PASS, 5 tests. If FlashList renders nothing under Jest, add to `test/setup.ts`:
 
 ```ts
 jest.mock('@shopify/flash-list', () => ({ FlashList: require('react-native').FlatList }))
@@ -2378,7 +2472,7 @@ jest.mock('@shopify/flash-list', () => ({ FlashList: require('react-native').Fla
 pnpm run android
 ```
 
-Expected: after login, cards render; pull-to-refresh spins; an empty backend shows the empty state; backend down shows the error state and retry works. Screenshot light and dark.
+Expected: after login, cards render; scrolling to the bottom loads the next page (seed more than 20 auctions to see it); pull-to-refresh spins; an empty backend shows the empty state; backend down shows the error state and retry works. Screenshot light and dark.
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format
@@ -2397,7 +2491,7 @@ git commit -m "Auction list with FlashList, skeleton, empty and error states"
 
 **Interfaces:**
 - Consumes: `useAuction`, `useBids`, `usePlaceBid`, `Auction`, `problemFrom`, `problemTag`, `Dialog*`, `Field*`, `Input`, `Button`, `Separator`, `Skeleton`.
-- Produces: `AuctionDetailScreen({ auctionId: string })` (testIDs `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`); `useRejectionMessage(): (p: Problem) => string`; test helper `toastMock` with `.success` and `.error`.
+- Produces: `AuctionDetailScreen({ auctionId: string })` (testIDs `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`); `useRejectionMessage(): (p: Problem) => string`; test helper `mockToast` with `.success` and `.error`.
 
 - [ ] **Step 1: Install sonner-native, mount the Toaster, mock it in tests**
 
@@ -2410,8 +2504,8 @@ In `app/_layout.tsx`: `import { Toaster } from 'sonner-native'` and render `<Toa
 In `test/setup.ts`:
 
 ```ts
-export const toastMock = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })
-jest.mock('sonner-native', () => ({ toast: toastMock, Toaster: () => null }))
+export const mockToast = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })
+jest.mock('sonner-native', () => ({ toast: mockToast, Toaster: () => null }))
 ```
 
 and clear all three in `afterEach`.
@@ -2426,10 +2520,16 @@ import { http, HttpResponse } from 'msw'
 import { AuctionDetailScreen } from '@/features/auctions/screens/AuctionDetailScreen'
 import { server } from '../../mswServer'
 import { renderWithProviders } from '../../renderApp'
-import { toastMock } from '../../setup'
+import { mockToast } from '../../setup'
 import { AUCTION_ID, BASE, bidTooLowProblem, bidsPageFixture, detailHandler } from './mocks'
 
 const bidsUrl = `${BASE}/v1/auctions/${AUCTION_ID}/bids`
+
+async function openDialogAndBid(amount: string) {
+  await fireEvent.press(await screen.findByTestId('bid-open'))
+  await fireEvent.changeText(await screen.findByTestId('bid-amount'), amount)
+  await fireEvent.press(screen.getByTestId('bid-submit'))
+}
 
 describe('AuctionDetailScreen', () => {
   it('renders the auction and its bid history', async () => {
@@ -2439,7 +2539,7 @@ describe('AuctionDetailScreen', () => {
         HttpResponse.json(bidsPageFixture(['019ed9bb-0000-7000-8000-000000000b01'], false)),
       ),
     )
-    renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
     expect(await screen.findByText('Château Margaux 2015')).toBeTruthy()
     expect(await screen.findByText(/by bidder-0/)).toBeTruthy()
   })
@@ -2456,8 +2556,8 @@ describe('AuctionDetailScreen', () => {
         HttpResponse.json(new URL(request.url).searchParams.has('after-id') ? second : first),
       ),
     )
-    renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
-    fireEvent.press(await screen.findByText('Load more bids'))
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await fireEvent.press(await screen.findByText('Load more bids'))
     expect(await screen.findByText(/by bidder-2/)).toBeTruthy()
   })
 
@@ -2480,12 +2580,10 @@ describe('AuctionDetailScreen', () => {
         )
       }),
     )
-    renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
-    fireEvent.press(await screen.findByTestId('bid-open'))
-    fireEvent.changeText(await screen.findByTestId('bid-amount'), '200')
-    fireEvent.press(screen.getByTestId('bid-submit'))
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await openDialogAndBid('200')
     await waitFor(() => expect(posted).toEqual({ amount: 200 }))
-    expect(toastMock.success).toHaveBeenCalledWith('Bid placed.')
+    expect(mockToast.success).toHaveBeenCalledWith('Bid placed.')
   })
 
   it('shows the typed bid-too-low rejection inline', async () => {
@@ -2494,10 +2592,8 @@ describe('AuctionDetailScreen', () => {
       http.get(bidsUrl, () => HttpResponse.json(bidsPageFixture([], false))),
       http.post(bidsUrl, () => HttpResponse.json(bidTooLowProblem, { status: 409 })),
     )
-    renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
-    fireEvent.press(await screen.findByTestId('bid-open'))
-    fireEvent.changeText(await screen.findByTestId('bid-amount'), '120')
-    fireEvent.press(screen.getByTestId('bid-submit'))
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await openDialogAndBid('120')
     expect(await screen.findByText(/Bid too low — someone got there first/)).toBeTruthy()
   })
 
@@ -2510,7 +2606,7 @@ describe('AuctionDetailScreen', () => {
         ),
       ),
     )
-    renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
     expect(await screen.findByTestId('error-state')).toBeTruthy()
   })
 })
@@ -2558,7 +2654,7 @@ import { toast } from 'sonner-native'
 import { useTranslations } from 'use-intl'
 import { z } from 'zod'
 import { problemFrom } from '@/api/problem'
-import { Field, FieldError, FieldLabel } from '@/components/Field'
+import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -2569,7 +2665,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { usePriceFormatter } from '@/features/auctions/format'
 import { usePlaceBid, type Auction } from '@/features/auctions/queries'
@@ -2582,13 +2677,17 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
   const price = usePriceFormatter()
   const rejectionMessage = useRejectionMessage()
   const placeBid = usePlaceBid(auction.id)
-  const bidSchema = z.object({ amount: z.coerce.number().positive(t('bidAmountPositive')) })
+  // zod 4 infers `unknown` as the input of z.coerce.number(); the <string>
+  // argument declares the wire input so the form field and resolver agree.
+  const bidSchema = z.object({
+    amount: z.coerce.number<string>().positive(t('bidAmountPositive')),
+  })
   const {
     control,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<{ amount: string }, unknown, z.output<typeof bidSchema>>({
+  } = useForm<z.input<typeof bidSchema>, unknown, z.output<typeof bidSchema>>({
     resolver: zodResolver(bidSchema),
     defaultValues: { amount: '' },
   })
@@ -2633,7 +2732,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
             control={control}
             name="amount"
             render={({ field: { onChange, onBlur, value } }) => (
-              <Input
+              <FieldInput
                 testID="bid-amount"
                 keyboardType="decimal-pad"
                 placeholder={String(auction.currentPrice)}
@@ -2871,30 +2970,30 @@ import { tokenStore } from '@/features/auth/tokenStore'
 import { SettingsScreen } from '@/features/settings/screens/SettingsScreen'
 import { readThemePreference } from '@/theme/preferences'
 import { renderWithProviders } from '../../renderApp'
-import { routerMock } from '../../setup'
+import { mockRouter } from '../../setup'
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
     tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
   })
 
-  it('shows who is signed in and the version', () => {
-    renderWithProviders(<SettingsScreen />)
+  it('shows who is signed in and the version', async () => {
+    await renderWithProviders(<SettingsScreen />)
     expect(screen.getByText('Signed in as a@example.com')).toBeTruthy()
     expect(screen.getByText(/Version/)).toBeTruthy()
   })
 
-  it('persists the theme choice', () => {
-    renderWithProviders(<SettingsScreen />)
-    fireEvent.press(screen.getByTestId('theme-dark'))
+  it('persists the theme choice', async () => {
+    await renderWithProviders(<SettingsScreen />)
+    await fireEvent.press(screen.getByTestId('theme-dark'))
     expect(readThemePreference()).toBe('dark')
   })
 
-  it('logs out and returns to login', () => {
-    renderWithProviders(<SettingsScreen />)
-    fireEvent.press(screen.getByTestId('logout'))
+  it('logs out and returns to login', async () => {
+    await renderWithProviders(<SettingsScreen />)
+    await fireEvent.press(screen.getByTestId('logout'))
     expect(tokenStore.get()).toBeNull()
-    expect(routerMock.replace).toHaveBeenCalledWith('/login')
+    expect(mockRouter.replace).toHaveBeenCalledWith('/login')
   })
 })
 ```
@@ -3029,7 +3128,7 @@ git commit -m "Settings screen: theme preference, logout, version"
 
 **Interfaces:**
 - Consumes: `toast`, `expo-updates`, `AppState`, `messages`.
-- Produces: `checkForOtaUpdate(deps: OtaDeps): Promise<void>` (pure, tested); `useOtaUpdates(): void` (mounted once in the root layout).
+- Produces: `checkForOtaUpdate(deps: OtaDeps): Promise<void>` (pure, tested); `OtaDeps` with `prompt(onAccept)` and `failed(retry)` callbacks; `useOtaUpdates(): void` (mounted once in the root layout).
 
 - [ ] **Step 1: Asset sources and generator**
 
@@ -3196,44 +3295,54 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 ```ts
 import { checkForOtaUpdate, type OtaDeps } from '@/updates/useOtaUpdates'
 
-function deps(overrides: Partial<OtaDeps> = {}): OtaDeps & { prompt: jest.Mock } {
+type TestDeps = OtaDeps & { prompt: jest.Mock; failed: jest.Mock }
+
+function deps(overrides: Partial<OtaDeps> = {}): TestDeps {
   return {
     isEnabled: true,
     checkForUpdate: jest.fn().mockResolvedValue({ isAvailable: true }),
     fetchUpdate: jest.fn().mockResolvedValue(undefined),
     reload: jest.fn().mockResolvedValue(undefined),
     prompt: jest.fn(),
+    failed: jest.fn(),
     now: () => 1_000_000,
     ...overrides,
   }
 }
 
+function acceptFrom(d: TestDeps): () => Promise<void> {
+  return d.prompt.mock.calls[0]?.[0] as () => Promise<void>
+}
+
+// The throttle is module state, so each test uses a clock well past the previous one.
 describe('checkForOtaUpdate', () => {
   it('prompts before downloading and downloads only on accept', async () => {
     const d = deps()
     await checkForOtaUpdate(d)
     expect(d.checkForUpdate).toHaveBeenCalledTimes(1)
     expect(d.fetchUpdate).not.toHaveBeenCalled()
-    const onAccept = d.prompt.mock.calls[0]?.[0] as () => Promise<void>
-    await onAccept()
+    await acceptFrom(d)()
     expect(d.fetchUpdate).toHaveBeenCalledTimes(1)
     expect(d.reload).toHaveBeenCalledTimes(1)
   })
 
   it('does nothing when no update is available', async () => {
-    const d = deps({ checkForUpdate: jest.fn().mockResolvedValue({ isAvailable: false }) })
+    const d = deps({
+      now: () => 5_000_000,
+      checkForUpdate: jest.fn().mockResolvedValue({ isAvailable: false }),
+    })
     await checkForOtaUpdate(d)
     expect(d.prompt).not.toHaveBeenCalled()
   })
 
   it('does nothing when updates are disabled (dev, Expo Go)', async () => {
-    const d = deps({ isEnabled: false })
+    const d = deps({ isEnabled: false, now: () => 10_000_000 })
     await checkForOtaUpdate(d)
     expect(d.checkForUpdate).not.toHaveBeenCalled()
   })
 
   it('throttles checks to once per five minutes', async () => {
-    let t = 10_000_000
+    let t = 15_000_000
     const d = deps({ now: () => t })
     await checkForOtaUpdate(d)
     t += 60_000
@@ -3251,10 +3360,25 @@ describe('checkForOtaUpdate', () => {
     })
     await expect(checkForOtaUpdate(d)).resolves.toBeUndefined()
   })
+
+  it('reports a failed download and offers a retry that can succeed', async () => {
+    const d = deps({
+      now: () => 25_000_000,
+      fetchUpdate: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue(undefined),
+    })
+    await checkForOtaUpdate(d)
+    await expect(acceptFrom(d)()).resolves.toBeUndefined()
+    expect(d.reload).not.toHaveBeenCalled()
+    expect(d.failed).toHaveBeenCalledTimes(1)
+    const retry = d.failed.mock.calls[0]?.[0] as () => Promise<void>
+    await retry()
+    expect(d.reload).toHaveBeenCalledTimes(1)
+  })
 })
 ```
-
-(The throttle is module state, so later tests use clocks far ahead of earlier ones.)
 
 Run: `pnpm test -- useOtaUpdates` → FAIL, module not found.
 
@@ -3278,6 +3402,7 @@ export interface OtaDeps {
   fetchUpdate: () => Promise<unknown>
   reload: () => Promise<void>
   prompt: (onAccept: () => Promise<void>) => void
+  failed: (retry: () => Promise<void>) => void
   now: () => number
 }
 
@@ -3293,10 +3418,17 @@ export async function checkForOtaUpdate(deps: OtaDeps): Promise<void> {
   try {
     const { isAvailable } = await deps.checkForUpdate()
     if (!isAvailable) return
-    deps.prompt(async () => {
-      await deps.fetchUpdate()
-      await deps.reload()
-    })
+    // The accept callback runs long after this try/catch has returned, so it
+    // must handle its own failure: a dropped download reports and offers a retry.
+    const accept = async (): Promise<void> => {
+      try {
+        await deps.fetchUpdate()
+        await deps.reload()
+      } catch {
+        deps.failed(accept)
+      }
+    }
+    deps.prompt(accept)
   } catch {
     // Offline or the update server is down: try again on the next check.
   }
@@ -3314,6 +3446,10 @@ const liveDeps: OtaDeps = {
       duration: Number.POSITIVE_INFINITY,
       action: { label: t('update'), onClick: () => void onAccept() },
     }),
+  failed: (retry) =>
+    toast.error(t('failed'), {
+      action: { label: t('retry'), onClick: () => void retry() },
+    }),
   now: () => Date.now(),
 }
 
@@ -3330,7 +3466,7 @@ export function useOtaUpdates(): void {
 
 In `app/_layout.tsx`: `import { useOtaUpdates } from '@/updates/useOtaUpdates'` and call `useOtaUpdates()` inside `RootLayout` before the `if (!ready) return null` line.
 
-Run: `pnpm test -- useOtaUpdates` → PASS, 5 tests.
+Run: `pnpm test -- useOtaUpdates` → PASS, 6 tests.
 
 - [ ] **Step 5: Prebuild gate and commit**
 
@@ -3727,6 +3863,10 @@ describe('init-project', () => {
     expect(layout).not.toContain('auction')
     expect(layout).toContain("const indexTitle = tNav('home')")
 
+    // The bundle id follows the name (app.config.ts), so the flows must too.
+    const smoke = fs.readFileSync(path.join(dir, '.maestro', 'smoke.yml'), 'utf-8')
+    expect(smoke).toContain('appId: dev.acme.mobile')
+
     const messages = JSON.parse(
       fs.readFileSync(path.join(dir, 'src', 'i18n', 'messages', 'en.json'), 'utf-8'),
     ) as Record<string, unknown>
@@ -3829,12 +3969,24 @@ if (name) {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'))
   pkg.name = `${name}-mobile`
   fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+
+  // app.config.ts derives the bundle id from the name; keep the Maestro flows in step.
+  const scheme = name.replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const maestroDir = '.maestro'
+  if (fs.existsSync(maestroDir)) {
+    for (const f of fs.readdirSync(maestroDir).filter((f) => f.endsWith('.yml'))) {
+      const p = path.join(maestroDir, f)
+      const flow = fs.readFileSync(p, 'utf-8')
+      fs.writeFileSync(p, flow.replace(/^appId: .*$/m, `appId: dev.${scheme}.mobile`))
+    }
+  }
 }
 
 console.log('Deleted the auction demo (feature, routes, tests, Maestro flow)')
 if (licenseDeleted) console.log('Deleted LICENSE (generated projects may relicense freely)')
 console.log(`Stripped auction blocks from ${stripped} file(s)`)
-if (name) console.log(`Renamed package to ${name}-mobile (app name, slug and scheme follow)`)
+if (name)
+  console.log(`Renamed package to ${name}-mobile (app name, slug, scheme, bundle id and Maestro appId follow)`)
 console.log()
 console.log('Next:')
 console.log('  pnpm run typecheck && pnpm run lint && pnpm run test')
@@ -4024,7 +4176,8 @@ Copy Appendix A of the spec into `CLAUDE.md` verbatim, then make these correctio
 - the Maestro line names `.maestro/smoke.yml` and `.maestro/auctions.yml`;
 - the prebuild script is `pnpm run native:prebuild`;
 - the Date ban sentence adds the second exemption, `src/updates/useOtaUpdates.ts`;
-- the Structure bullet on UI adds: "`Field` (`src/components/Field.tsx`) wraps a control and sets `accessibilityState.invalid`; `Screen` wraps every screen body (`scroll` for content, `form` for inputs)."
+- the Structure bullet on UI adds: "`Field` (`src/components/Field.tsx`) provides validity by context and `FieldInput` is the `Input` that consumes it, so a `Controller` can sit between them; `Screen` wraps every screen body (`scroll` for content, `form` for inputs)."
+- the Tests bullet adds: "RNTL 14: `render` and `fireEvent` are async, always `await` them. Mock variables captured by `jest.mock` factories must be `mock`-prefixed; state that a factory needs lives inside the factory."
 
 - [ ] **Step 3: README.md**
 
@@ -4060,5 +4213,7 @@ git commit -m "README, CLAUDE.md, LICENSE, deep-link docs"
 
 ## Self-review notes
 
+- **Second review pass (2026-09-21).** Ten findings from an external review were verified and folded in: typed ESLint rules scoped to TS (T1); explicit scaffold package name (T1); jest mock factories with factory-local state and `mock`-prefixed captures (T3, T5, T7, T8); RNTL 14 async `render`/`fireEvent` awaited everywhere (T4–T8); safe-area jest mock (T4); `Field` validity by context with `FieldInput` (T4, T5, T7); hydration failure falls back to logged-out (T3); offset-paged infinite list with an end-reached test (T6); zod 4 `z.coerce.number<string>()` (T7); OTA accept path reports failure and offers retry (T9); `init-project` rewrites the Maestro `appId` (T12).
+
 - **Spec coverage.** Layout (T1, T5); core port (T2); token store (T3); UI and theme (T4); screens (T5–T8); navigation, deep links and return-to (T5, T9, T14); EAS, OTA, assets (T9); observability (T10); error handling (T2 tests, T6/T7 states, T5 gate, T9 swallow); testing (every task); Maestro (T11); init-project (T12); CI (T13); docs and CLAUDE.md (T14). The two spec deviations are stated in Global Constraints and applied in T9 (committed PNGs) and T8 (local logout).
-- **Names used across tasks.** `tokenStore.{get,set,subscribe,hydrate,isHydrated,flush}`; `useAuth().{tokens,isHydrated,logout}`; `setReturnTo`/`consumeReturnTo`; `Field`/`FieldLabel`/`FieldError`; `Screen({scroll,form})`; `EmptyState`; `ErrorState`; `useThemePreference`; `readThemePreference`/`writeThemePreference`; `checkForOtaUpdate`/`useOtaUpdates`/`OtaDeps`; `initObservability`/`installErrorReporting`; test helpers `renderWithProviders`, `routerMock`, `toastMock`, `secureStoreMock`; fixtures `BASE`, `AUCTION_ID`, `auctionsPageFixture`, `bidsPageFixture`, `bidTooLowProblem`, `listHandler`, `detailHandler`; testIDs `login-email`, `login-submit`, `open-settings`, `auction-<id>`, `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`, `theme-*`, `logout`, `empty-state`, `error-state`, `field-error`.
+- **Names used across tasks.** `tokenStore.{get,set,subscribe,hydrate,isHydrated,flush}`; `useAuth().{tokens,isHydrated,logout}`; `setReturnTo`/`consumeReturnTo`; `Field`/`FieldLabel`/`FieldError`/`FieldInput`/`useFieldInvalid`; `Screen({scroll,form})`; `useAuctionsInfinite`; `EmptyState`; `ErrorState`; `useThemePreference`; `readThemePreference`/`writeThemePreference`; `checkForOtaUpdate`/`useOtaUpdates`/`OtaDeps{prompt,failed}`; `initObservability`/`installErrorReporting`; test helpers `renderWithProviders`, `mockRouter`, `mockToast`, `secureStoreMock`; fixtures `BASE`, `AUCTION_ID`, `auctionsPageFixture`, `bidsPageFixture`, `bidTooLowProblem`, `listHandler`, `detailHandler`; testIDs `login-email`, `login-submit`, `open-settings`, `auction-<id>`, `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`, `theme-*`, `logout`, `empty-state`, `error-state`, `field-error`.

@@ -128,7 +128,10 @@ in the plan before UI work starts.
   `src/components/ui/` as on the web.
 - **Field composition**: `Field` + `FieldLabel` + `FieldError` in
   `src/components/Field.tsx`, same props shape as the web's so forms read the
-  same in code. Sets `accessibilityState={{ invalid }}` on the control.
+  same in code. React Native has no `invalid` accessibility state, so the
+  error reaches assistive tech the supported way: `FieldInput` sets it as the
+  control's `accessibilityHint` and `FieldError` renders it as an `alert`
+  live region.
 - **Theme**: `useColorScheme` from NativeWind seeded by the system scheme, with
   a light / dark / system override persisted in MMKV. Status bar style and the
   Android navigation bar follow the theme.

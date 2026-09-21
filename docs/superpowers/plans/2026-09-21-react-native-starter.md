@@ -51,12 +51,15 @@ cd madrileno-mobile
 rm App.tsx index.ts
 sed -i 's/"name": "madrileno-mobile-scaffold"/"name": "madrileno-mobile"/' package.json
 grep '"name"' package.json
+pnpm install
 git status --short | head
 ```
 
 Expected: `"name": "madrileno-mobile"` (Task 9 derives the app name, slug, scheme and bundle id from it, so the scaffold's name must not leak through), and `package.json`, `app.json`, `tsconfig.json`, `assets/`, `.gitignore` appear untracked.
 
 - [ ] **Step 2: Install the base dependency set**
+
+`pnpm expo …` runs the project-local Expo CLI, which exists only after the `pnpm install` above.
 
 ```bash
 pnpm expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants expo-status-bar expo-splash-screen expo-system-ui
@@ -76,6 +79,7 @@ Set `"main": "expo-router/entry"` in `package.json`.
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "routes:types": "expo export --platform android --output-dir .expo/typegen",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -366,10 +370,10 @@ Object.assign(globalThis, { fetch: undiciFetch, Headers, Request, Response })
 
 - [ ] **Step 7: Generate typed routes, then typecheck, lint, format**
 
-Typed routes live in `.expo/types/router.d.ts`, written by the bundler:
+Typed routes live in `.expo/types/router.d.ts`, which is untracked and written only when the bundler runs. `routes:types` runs a throwaway export into the gitignored `.expo/` so the types exist before `tsc`; CI runs the same script (Task 13).
 
 ```bash
-pnpm exec expo export --platform android --output-dir /tmp/claude-1000/-home-luksow-iterators-madrileno/6920e7af-2dbf-4a38-9541-0c0eaa0ba98a/scratchpad/export-check
+pnpm run routes:types
 pnpm run typecheck && pnpm run lint && pnpm run format
 ```
 
@@ -1010,7 +1014,7 @@ git commit -m "Token store on expo-secure-store with an authoritative in-memory 
 - Test: `test/theme/preferences.test.ts`, `test/components/Field.test.tsx`
 
 **Interfaces:**
-- Produces: `cn(...inputs: ClassValue[]): string`; `Screen({ children, scroll?, form?, className? })`; `Field({ invalid?, className?, children })` (provides validity through context), `FieldLabel({ children })`, `FieldError({ children })`, `FieldInput(props of Input)` (an `Input` that reads the Field's validity and sets `accessibilityState.invalid`), `useFieldInvalid(): boolean`; `EmptyState({ title, body? })` (testID `empty-state`); `ErrorState({ message, onRetry? })` (testID `error-state`, uses `error.retry`); `type ThemePreference = 'light' | 'dark' | 'system'`; `readThemePreference(): ThemePreference`; `writeThemePreference(p): void`; `useThemePreference(): { preference, setPreference, resolved: 'light' | 'dark' }`; `ThemeProvider({ children })`.
+- Produces: `cn(...inputs: ClassValue[]): string`; `Screen({ children, scroll?, form?, className? })`; `Field({ error?, className?, children })` (provides the error message through context), `FieldLabel({ children })`, `FieldError()` (renders the context's error as an `alert` live region, or nothing), `FieldInput(props of Input)` (an `Input` whose `accessibilityHint` is the error message, so screen readers read it after the label), `useFieldError(): string | null`; `EmptyState({ title, body? })` (testID `empty-state`); `ErrorState({ message, onRetry? })` (testID `error-state`, uses `error.retry`); `type ThemePreference = 'light' | 'dark' | 'system'`; `readThemePreference(): ThemePreference`; `writeThemePreference(p): void`; `useThemePreference(): { preference, setPreference, resolved: 'light' | 'dark' }`; `ThemeProvider({ children })`.
 
 - [ ] **Step 1: Install NativeWind and reusables**
 
@@ -1305,22 +1309,26 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 The `Screen` wrapper reads safe-area insets and the hook throws without a provider, so mock the library in `test/setup.ts` with the mock it ships:
 
 ```ts
-jest.mock('react-native-safe-area-context', () =>
-  require('react-native-safe-area-context/jest/mock'),
+// The package's jest mock is a CommonJS module with a `default` export.
+jest.mock(
+  'react-native-safe-area-context',
+  () =>
+    (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: unknown })
+      .default,
 )
 ```
 
-`test/components/Field.test.tsx` — tests the real composition (a react-hook-form `Controller` between `Field` and the input), because that is how every form in the app uses it:
+`test/components/Field.test.tsx` — tests the real composition (a react-hook-form `Controller` between `Field` and the input), because that is how every form in the app uses it. React Native has no `invalid` accessibility state; the supported signals are a hint on the control and an alert-role live region for the message:
 
 ```tsx
 import { render, screen } from '@testing-library/react-native'
 import { Controller, useForm } from 'react-hook-form'
 import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
 
-function EmailField({ invalid }: { invalid: boolean }) {
+function EmailField({ error }: { error?: string }) {
   const { control } = useForm<{ email: string }>({ defaultValues: { email: '' } })
   return (
-    <Field invalid={invalid}>
+    <Field error={error}>
       <FieldLabel>Email</FieldLabel>
       <Controller
         control={control}
@@ -1329,22 +1337,22 @@ function EmailField({ invalid }: { invalid: boolean }) {
           <FieldInput testID="email" value={field.value} onChangeText={field.onChange} />
         )}
       />
-      {invalid && <FieldError>Required</FieldError>}
+      <FieldError />
     </Field>
   )
 }
 
 describe('Field', () => {
-  it('marks the control invalid through the Controller and shows the error', async () => {
-    await render(<EmailField invalid />)
+  it('announces the error: hint on the control, alert text below it', async () => {
+    await render(<EmailField error="Required" />)
     expect(screen.getByText('Email')).toBeTruthy()
-    expect(screen.getByText('Required')).toBeTruthy()
-    expect(screen.getByTestId('email').props.accessibilityState).toEqual({ invalid: true })
+    expect(screen.getByTestId('email').props.accessibilityHint).toBe('Required')
+    expect(screen.getByRole('alert')).toHaveTextContent('Required')
   })
 
-  it('marks the control valid and renders no error slot', async () => {
-    await render(<EmailField invalid={false} />)
-    expect(screen.getByTestId('email').props.accessibilityState).toEqual({ invalid: false })
+  it('renders no hint and no error slot when valid', async () => {
+    await render(<EmailField />)
+    expect(screen.getByTestId('email').props.accessibilityHint).toBeUndefined()
     expect(screen.queryByTestId('field-error')).toBeNull()
   })
 })
@@ -1354,7 +1362,7 @@ describe('Field', () => {
 
 Run: `pnpm test -- test/components` → FAIL, module not found.
 
-`src/components/Field.tsx` — validity travels by context, not by cloning: the immediate child is usually a `Controller`, which would swallow a cloned prop instead of forwarding it to the input.
+`src/components/Field.tsx` — the error travels by context, not by cloning: the immediate child is usually a `Controller`, which would swallow a cloned prop instead of forwarding it to the input.
 
 ```tsx
 import { createContext, useContext, type ComponentProps, type ReactNode } from 'react'
@@ -1363,39 +1371,47 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { cn } from '@/lib/utils'
 
-const FieldContext = createContext<{ invalid: boolean }>({ invalid: false })
+const FieldContext = createContext<{ error: string | null }>({ error: null })
 
 interface FieldProps {
-  invalid?: boolean
+  error?: string
   className?: string
   children: ReactNode
 }
 
-export function Field({ invalid = false, className, children }: FieldProps) {
+export function Field({ error, className, children }: FieldProps) {
   return (
-    <FieldContext.Provider value={{ invalid }}>
+    <FieldContext.Provider value={{ error: error ?? null }}>
       <View className={cn('gap-1.5', className)}>{children}</View>
     </FieldContext.Provider>
   )
 }
 
-export function useFieldInvalid(): boolean {
-  return useContext(FieldContext).invalid
+export function useFieldError(): string | null {
+  return useContext(FieldContext).error
 }
 
+// Screen readers read the hint after the label, so the error is heard on focus.
 export function FieldInput(props: ComponentProps<typeof Input>) {
-  const invalid = useFieldInvalid()
-  return <Input {...props} accessibilityState={{ ...props.accessibilityState, invalid }} />
+  const error = useFieldError()
+  return <Input {...props} accessibilityHint={error ?? props.accessibilityHint} />
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
   return <Text variant="small">{children}</Text>
 }
 
-export function FieldError({ children }: { children: ReactNode }) {
+export function FieldError() {
+  const error = useFieldError()
+  if (error === null) return null
   return (
-    <Text testID="field-error" className="text-destructive text-sm">
-      {children}
+    <Text
+      testID="field-error"
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      className="text-destructive text-sm"
+    >
+      {error}
     </Text>
   )
 }
@@ -1568,7 +1584,7 @@ git commit -m "NativeWind, react-native-reusables primitives, theme tokens and s
 
 **Interfaces:**
 - Consumes: `tokenStore`, `useAuth`, `registerAuthTokenProvider`, `client`, `problemFrom`, `Field`/`FieldLabel`/`FieldError`, `Screen`.
-- Produces: `messages` (typed `en.json`); `LocaleProvider`; `setReturnTo(href: string): void`, `consumeReturnTo(): string | null`; `LoginScreen` (testIDs `login-email`, `login-submit`); `HomeScreen`; test helpers `renderWithProviders(ui: ReactElement)` and `mockRouter = { push, replace, back }`.
+- Produces: `messages` (typed `en.json`); `LocaleProvider`; `setReturnTo(pathname: string): void`, `consumeReturnTo(): Href | null` (the one sanctioned cast, at the router boundary); `LoginScreen` (testIDs `login-email`, `login-submit`); `HomeScreen`; test helpers `renderWithProviders(ui: ReactElement)` and `mockRouter = { push, replace, back }`.
 
 - [ ] **Step 1: Messages and provider**
 
@@ -1705,7 +1721,7 @@ Add an `expo-router` mock to `test/setup.ts` so screens can call `useRouter` wit
 ```ts
 export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
 jest.mock('expo-router', () => {
-  const React = require('react') as typeof import('react')
+  const React = jest.requireActual<typeof import('react')>('react')
   return {
     useRouter: () => mockRouter,
     useLocalSearchParams: () => ({}),
@@ -1745,16 +1761,21 @@ Run: `pnpm test -- returnTo` → FAIL, module not found.
 `src/features/auth/returnTo.ts`:
 
 ```ts
+import type { Href } from 'expo-router'
+
 // Where to go after login when a deep link hit an authed route cold. Kept in
 // memory only: it must not survive a restart.
-let href: string | null = null
+let href: Href | null = null
 
-export function setReturnTo(next: string): void {
-  if (next === '/login' || next.startsWith('/login?')) return
-  href = next
+export function setReturnTo(pathname: string): void {
+  if (pathname === '/login' || pathname.startsWith('/login?')) return
+  // The one cast at this boundary: the value comes from usePathname(), i.e.
+  // from the router itself, so it is a route by construction. router.replace
+  // requires a typed Href and a plain string would not typecheck.
+  href = pathname as Href
 }
 
-export function consumeReturnTo(): string | null {
+export function consumeReturnTo(): Href | null {
   const next = href
   href = null
   return next
@@ -1886,7 +1907,7 @@ export function LoginScreen() {
         <Text variant="h3">{t('heading')}</Text>
         <Text variant="muted">{t('hint')}</Text>
       </View>
-      <Field invalid={errors.email !== undefined}>
+      <Field error={errors.email?.message}>
         <FieldLabel>{t('emailLabel')}</FieldLabel>
         <Controller
           control={control}
@@ -1906,7 +1927,7 @@ export function LoginScreen() {
             />
           )}
         />
-        {errors.email && <FieldError>{errors.email.message}</FieldError>}
+        <FieldError />
       </Field>
       {problem !== null && <Text className="text-destructive">{problem.title}</Text>}
       <Button testID="login-submit" onPress={() => void onSubmit()} disabled={isSubmitting}>
@@ -2463,7 +2484,9 @@ export default function AppLayout() {
 Run: `pnpm test -- AuctionListScreen` → PASS, 5 tests. If FlashList renders nothing under Jest, add to `test/setup.ts`:
 
 ```ts
-jest.mock('@shopify/flash-list', () => ({ FlashList: require('react-native').FlatList }))
+jest.mock('@shopify/flash-list', () => ({
+  FlashList: jest.requireActual<typeof import('react-native')>('react-native').FlatList,
+}))
 ```
 
 (FlatList accepts the same props used here.)
@@ -2726,7 +2749,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
             {t('bidDialogBody', { price: price(auction.currentPrice, auction.currency) })}
           </DialogDescription>
         </DialogHeader>
-        <Field invalid={errors.amount !== undefined}>
+        <Field error={errors.amount?.message}>
           <FieldLabel>{t('bidAmountLabel', { currency: auction.currency })}</FieldLabel>
           <Controller
             control={control}
@@ -2742,7 +2765,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
               />
             )}
           />
-          {errors.amount && <FieldError>{errors.amount.message}</FieldError>}
+          <FieldError />
         </Field>
         {rejection !== null && (
           <Text className="text-destructive" testID="bid-rejection">
@@ -4006,7 +4029,7 @@ rm -rf /tmp/claude-1000/-home-luksow-iterators-madrileno/6920e7af-2dbf-4a38-9541
 cp -r . /tmp/claude-1000/-home-luksow-iterators-madrileno/6920e7af-2dbf-4a38-9541-0c0eaa0ba98a/scratchpad/init-check
 cd /tmp/claude-1000/-home-luksow-iterators-madrileno/6920e7af-2dbf-4a38-9541-0c0eaa0ba98a/scratchpad/init-check
 node scripts/init-project.mjs acme
-pnpm run typecheck && pnpm run lint && pnpm test
+pnpm run routes:types && pnpm run typecheck && pnpm run lint && pnpm test
 cd /home/luksow/iterators/madrileno/madrileno-mobile
 ```
 
@@ -4046,6 +4069,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # .expo/types/router.d.ts is untracked; generate it or typecheck sees no route types.
+      - run: pnpm run routes:types
       # The contract is vendored (src/contracts), so CI needs no backend.
       - run: pnpm run typecheck
       - run: pnpm run lint
@@ -4099,6 +4124,8 @@ jobs:
       - run: |
           test ! -f LICENSE || { echo "LICENSE not deleted"; exit 1; }
           ! grep -q '^## License' README.md || { echo "README License section not stripped"; exit 1; }
+      # After stripping routes, regenerate the route types before checking them.
+      - run: pnpm run routes:types
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm test
@@ -4176,7 +4203,7 @@ Copy Appendix A of the spec into `CLAUDE.md` verbatim, then make these correctio
 - the Maestro line names `.maestro/smoke.yml` and `.maestro/auctions.yml`;
 - the prebuild script is `pnpm run native:prebuild`;
 - the Date ban sentence adds the second exemption, `src/updates/useOtaUpdates.ts`;
-- the Structure bullet on UI adds: "`Field` (`src/components/Field.tsx`) provides validity by context and `FieldInput` is the `Input` that consumes it, so a `Controller` can sit between them; `Screen` wraps every screen body (`scroll` for content, `form` for inputs)."
+- the Structure bullet on UI adds: "`Field error={…}` (`src/components/Field.tsx`) provides the error by context; `FieldInput` is the `Input` that turns it into an `accessibilityHint` and `FieldError` renders it as an `alert` live region, so a `Controller` can sit between them. React Native has no `invalid` accessibility state — don't invent one. `Screen` wraps every screen body (`scroll` for content, `form` for inputs)."
 - the Tests bullet adds: "RNTL 14: `render` and `fireEvent` are async, always `await` them. Mock variables captured by `jest.mock` factories must be `mock`-prefixed; state that a factory needs lives inside the factory."
 
 - [ ] **Step 3: README.md**
@@ -4195,7 +4222,7 @@ Write it in the web README's voice with these sections, in order. Each bullet is
 10. **Conventions.** Types from the contract; typed errors by code; Temporal not Date; feature folders; `app/` is wiring only; tokens not colors.
 11. **Starting a real project.** `node scripts/init-project.mjs my-project`; what it removes; `pnpm run native:prebuild` afterwards because the bundle ids follow the name.
 12. **Out of scope, and how to add each.** Push notifications (`expo-notifications` plus a device-token endpoint in the backend); offline persistence (`@tanstack/query-persist-client-core` with MMKV); iOS verification (a Mac or EAS cloud builds plus TestFlight).
-13. **Scripts.** A table with every script in `package.json`.
+13. **Scripts.** A table with every script in `package.json`, including `routes:types` and why CI and fresh clones need it before `typecheck`.
 14. **License.** The web README's wording. It must stay the last `## ` section so `init-project` can strip it.
 
 `docs/deep-links.md`: the `assetlinks.json` and `apple-app-site-association` templates with the bundle id placeholder `dev.<scheme>.mobile`, where each is served (`/.well-known/`), the SHA-256 fingerprint command for Android, and the `adb` / `xcrun simctl openurl` test commands.
@@ -4213,7 +4240,8 @@ git commit -m "README, CLAUDE.md, LICENSE, deep-link docs"
 
 ## Self-review notes
 
+- **Third review pass (2026-09-21).** Five more findings verified and folded in: safe-area jest mock uses its `default` export and no bare `require` under typed lint (T4, T5, T6); `Field` signals errors with `accessibilityHint` and an `alert` live region instead of a non-existent `invalid` state (T4, T5, T7); `pnpm install` precedes the first `pnpm expo` call (T1); `returnTo` stores a typed `Href` with the one documented cast (T5); `routes:types` generates route declarations before `typecheck` locally and in both CI jobs (T1, T12, T13).
 - **Second review pass (2026-09-21).** Ten findings from an external review were verified and folded in: typed ESLint rules scoped to TS (T1); explicit scaffold package name (T1); jest mock factories with factory-local state and `mock`-prefixed captures (T3, T5, T7, T8); RNTL 14 async `render`/`fireEvent` awaited everywhere (T4–T8); safe-area jest mock (T4); `Field` validity by context with `FieldInput` (T4, T5, T7); hydration failure falls back to logged-out (T3); offset-paged infinite list with an end-reached test (T6); zod 4 `z.coerce.number<string>()` (T7); OTA accept path reports failure and offers retry (T9); `init-project` rewrites the Maestro `appId` (T12).
 
 - **Spec coverage.** Layout (T1, T5); core port (T2); token store (T3); UI and theme (T4); screens (T5–T8); navigation, deep links and return-to (T5, T9, T14); EAS, OTA, assets (T9); observability (T10); error handling (T2 tests, T6/T7 states, T5 gate, T9 swallow); testing (every task); Maestro (T11); init-project (T12); CI (T13); docs and CLAUDE.md (T14). The two spec deviations are stated in Global Constraints and applied in T9 (committed PNGs) and T8 (local logout).
-- **Names used across tasks.** `tokenStore.{get,set,subscribe,hydrate,isHydrated,flush}`; `useAuth().{tokens,isHydrated,logout}`; `setReturnTo`/`consumeReturnTo`; `Field`/`FieldLabel`/`FieldError`/`FieldInput`/`useFieldInvalid`; `Screen({scroll,form})`; `useAuctionsInfinite`; `EmptyState`; `ErrorState`; `useThemePreference`; `readThemePreference`/`writeThemePreference`; `checkForOtaUpdate`/`useOtaUpdates`/`OtaDeps{prompt,failed}`; `initObservability`/`installErrorReporting`; test helpers `renderWithProviders`, `mockRouter`, `mockToast`, `secureStoreMock`; fixtures `BASE`, `AUCTION_ID`, `auctionsPageFixture`, `bidsPageFixture`, `bidTooLowProblem`, `listHandler`, `detailHandler`; testIDs `login-email`, `login-submit`, `open-settings`, `auction-<id>`, `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`, `theme-*`, `logout`, `empty-state`, `error-state`, `field-error`.
+- **Names used across tasks.** `tokenStore.{get,set,subscribe,hydrate,isHydrated,flush}`; `useAuth().{tokens,isHydrated,logout}`; `setReturnTo`/`consumeReturnTo`; `Field({error})`/`FieldLabel`/`FieldError`/`FieldInput`/`useFieldError`; `Screen({scroll,form})`; `useAuctionsInfinite`; `EmptyState`; `ErrorState`; `useThemePreference`; `readThemePreference`/`writeThemePreference`; `checkForOtaUpdate`/`useOtaUpdates`/`OtaDeps{prompt,failed}`; `initObservability`/`installErrorReporting`; test helpers `renderWithProviders`, `mockRouter`, `mockToast`, `secureStoreMock`; fixtures `BASE`, `AUCTION_ID`, `auctionsPageFixture`, `bidsPageFixture`, `bidTooLowProblem`, `listHandler`, `detailHandler`; testIDs `login-email`, `login-submit`, `open-settings`, `auction-<id>`, `bid-open`, `bid-amount`, `bid-submit`, `bid-rejection`, `theme-*`, `logout`, `empty-state`, `error-state`, `field-error`.

@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { setTokenProvider } from '@/api/authFetch'
+import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStore'
 import { makeApiClient } from '@/api/orpc'
 import { server } from '../mswServer'
 
@@ -11,31 +11,16 @@ const REFRESHED = {
   userCreated: false,
 }
 
-interface Tokens {
-  jwt: string
-  refreshToken: string
-}
-let tokens: Tokens | null = null
-
 beforeAll(() => {
-  setTokenProvider({
-    jwt: () => tokens?.jwt,
-    refreshToken: () => tokens?.refreshToken,
-    rotated: (jwt, refreshToken) => {
-      tokens = { jwt, refreshToken }
-    },
-    invalidated: () => {
-      tokens = null
-    },
-  })
-})
-
-beforeEach(() => {
-  tokens = null
+  registerAuthTokenProvider()
 })
 
 function loggedIn() {
-  tokens = { jwt: 'stale-jwt', refreshToken: '11111111-1111-4111-8111-111111111111' }
+  tokenStore.set({
+    jwt: 'stale-jwt',
+    refreshToken: '11111111-1111-4111-8111-111111111111',
+    email: 'test@example.com',
+  })
 }
 
 const reject401 = () =>
@@ -69,8 +54,8 @@ describe('the authorized fetch behind the oRPC client', () => {
 
     expect(user.id).toBe(USER.id)
     expect(refreshCalls).toBe(1)
-    expect(tokens?.jwt).toBe('fresh-jwt')
-    expect(tokens?.refreshToken).toBe(REFRESHED.refreshToken)
+    expect(tokenStore.get()?.jwt).toBe('fresh-jwt')
+    expect(tokenStore.get()?.refreshToken).toBe(REFRESHED.refreshToken)
   })
 
   it('deduplicates concurrent 401s into a single refresh (token rotation safety)', async () => {
@@ -91,7 +76,7 @@ describe('the authorized fetch behind the oRPC client', () => {
     expect(refreshCalls).toBe(1)
     expect(a.id).toBe(USER.id)
     expect(b.id).toBe(USER.id)
-    expect(tokens?.jwt).toBe('fresh-jwt')
+    expect(tokenStore.get()?.jwt).toBe('fresh-jwt')
   })
 
   it('keeps the session when the refresh endpoint fails transiently (5xx)', async () => {
@@ -107,7 +92,7 @@ describe('the authorized fetch behind the oRPC client', () => {
     )
 
     await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
-    expect(tokens?.refreshToken).toBe('11111111-1111-4111-8111-111111111111')
+    expect(tokenStore.get()?.refreshToken).toBe('11111111-1111-4111-8111-111111111111')
   })
 
   it('keeps the session when the refresh request fails at the network level', async () => {
@@ -118,7 +103,7 @@ describe('the authorized fetch behind the oRPC client', () => {
     )
 
     await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
-    expect(tokens?.refreshToken).toBe('11111111-1111-4111-8111-111111111111')
+    expect(tokenStore.get()?.refreshToken).toBe('11111111-1111-4111-8111-111111111111')
   })
 
   it('logs out when the refresh call itself is rejected', async () => {
@@ -129,7 +114,7 @@ describe('the authorized fetch behind the oRPC client', () => {
     )
 
     await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
-    expect(tokens).toBeNull()
+    expect(tokenStore.get()).toBeNull()
   })
 
   it('keeps the session when the refresh succeeds but the retried request is still 401', async () => {
@@ -141,8 +126,8 @@ describe('the authorized fetch behind the oRPC client', () => {
 
     await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
     // A fresh JWT refused by one route is a per-resource failure, not an expired session.
-    expect(tokens?.jwt).toBe('fresh-jwt')
-    expect(tokens?.refreshToken).toBe(REFRESHED.refreshToken)
+    expect(tokenStore.get()?.jwt).toBe('fresh-jwt')
+    expect(tokenStore.get()?.refreshToken).toBe(REFRESHED.refreshToken)
   })
 
   it('sends no bearer header when logged out', async () => {

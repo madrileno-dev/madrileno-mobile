@@ -25,6 +25,24 @@ export const secureStoreMock = jest.requireMock<{ __store: Map<string, string> }
   'expo-secure-store',
 ).__store
 
+// The package's jest mock is a CommonJS module with a `default` export.
+jest.mock(
+  'react-native-safe-area-context',
+  () =>
+    jest.requireActual<{ default: unknown }>('react-native-safe-area-context/jest/mock').default,
+)
+
+jest.mock('react-native-mmkv', () => {
+  const store = new Map<string, string>()
+  return {
+    createMMKV: () => ({
+      getString: (k: string) => store.get(k),
+      set: (k: string, v: string) => store.set(k, v),
+      remove: (k: string) => store.delete(k),
+    }),
+  }
+})
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://reactnativereusables.com/schema.json",
+  "platforms": ["native"],
+  "aliases": {
+    "components": "@/components",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "utils": "@/lib/utils"
+  },
+  "tsx": true
+}

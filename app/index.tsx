@@ -1,9 +1,10 @@
-import { Text, View } from 'react-native'
+import { Screen } from '@/components/Screen'
+import { Text } from '@/components/ui/text'
 
 export default function Index() {
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>madrileno-mobile</Text>
-    </View>
+    <Screen className="items-center justify-center">
+      <Text variant="h3">madrileno-mobile</Text>
+    </Screen>
   )
 }

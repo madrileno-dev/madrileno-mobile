@@ -59,7 +59,11 @@ export const tokenStore = {
   set: (tokens: Tokens | null): void => {
     current = tokens
     // Chain writes so two rapid rotations cannot land out of order.
-    pending = pending.then(() => persist(tokens)).catch(() => undefined)
+    pending = pending
+      .then(() => persist(tokens))
+      .catch((error: unknown) => {
+        console.warn('[tokenStore] persisting tokens failed', error)
+      })
     listeners.forEach((listener) => listener())
   },
   flush: (): Promise<void> => pending,

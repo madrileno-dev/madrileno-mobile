@@ -64,6 +64,21 @@ describe('tokenStore', () => {
     ])
   })
 
+  it('reports a failed write via console.warn but keeps the write chain alive', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    jest.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(new Error('keychain locked'))
+
+    tokenStore.set(tokens)
+    tokenStore.set({ ...tokens, jwt: 'jwt-2' })
+    await tokenStore.flush()
+
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledWith('[tokenStore] persisting tokens failed', expect.any(Error))
+    expect(secureStoreMock.get(KEY)).toBe(JSON.stringify({ ...tokens, jwt: 'jwt-2' }))
+
+    warnSpy.mockRestore()
+  })
+
   it('never reads the secure store again after hydration', async () => {
     secureStoreMock.set(KEY, JSON.stringify(tokens))
     await tokenStore.hydrate()
@@ -75,10 +90,30 @@ describe('tokenStore', () => {
   })
 
   it('treats a failed keychain read as logged out and still reports hydrated', async () => {
-    jest.mocked(SecureStore.getItemAsync).mockRejectedValueOnce(new Error('keychain locked'))
-    await tokenStore.hydrate()
-    expect(tokenStore.get()).toBeNull()
-    expect(tokenStore.isHydrated()).toBe(true)
+    // The shared `tokenStore` instance is already hydrated by earlier tests,
+    // so `isHydrated()` on it proves nothing about the pre-hydrate state.
+    // Load a fresh module instance instead, whose `hydrated` module state
+    // genuinely starts false.
+    let isolated!: {
+      store: typeof tokenStore
+      getItemAsync: jest.Mock
+    }
+    jest.isolateModules(() => {
+      const freshTokenStoreModule = jest.requireActual<typeof import('@/features/auth/tokenStore')>(
+        '@/features/auth/tokenStore',
+      )
+      const freshSecureStore = jest.requireMock<typeof SecureStore>('expo-secure-store')
+      isolated = {
+        store: freshTokenStoreModule.tokenStore,
+        getItemAsync: jest.mocked(freshSecureStore.getItemAsync),
+      }
+    })
+    isolated.getItemAsync.mockRejectedValueOnce(new Error('keychain locked'))
+
+    expect(isolated.store.isHydrated()).toBe(false)
+    await isolated.store.hydrate()
+    expect(isolated.store.get()).toBeNull()
+    expect(isolated.store.isHydrated()).toBe(true)
   })
 
   it('notifies subscribers on every change', () => {

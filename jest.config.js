@@ -12,6 +12,6 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/', '/.expo/'],
   transform: { ...presetTransform, '^.+\\.mjs$': 'babel-jest' },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@rn-primitives/.*|nativewind|react-native-css-interop|sonner-native|@shopify/flash-list|lucide-react-native|react-native-reanimated|react-native-mmkv|react-native-nitro-modules|msw|rettime|until-async|@open-draft|@orpc/.*)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@rn-primitives/.*|nativewind|react-native-css-interop|sonner-native|@shopify/flash-list|lucide-react-native|react-native-reanimated|react-native-mmkv|react-native-nitro-modules|standard-navigation|msw|rettime|until-async|@open-draft|@orpc/.*)',
   ],
 }

@@ -7,6 +7,7 @@ const { transform: presetTransform } = require('jest-expo/jest-preset')
 
 module.exports = {
   preset: 'jest-expo',
+  resolver: '<rootDir>/jest.resolver.js',
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/', '/.expo/'],

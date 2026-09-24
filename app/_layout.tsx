@@ -7,6 +7,7 @@ import { Stack, usePathname, useRouter, type Href } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useRef } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { Toaster } from 'sonner-native'
 import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStore'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
@@ -72,6 +73,7 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" />
             </Stack>
             <PortalHost />
+            <Toaster position="bottom-center" />
           </ThemeProvider>
         </LocaleProvider>
       </QueryClientProvider>

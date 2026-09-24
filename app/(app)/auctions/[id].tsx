@@ -1,12 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
-import { Screen } from '@/components/Screen'
-import { Text } from '@/components/ui/text'
+import { AuctionDetailScreen } from '@/features/auctions/screens/AuctionDetailScreen'
 
-export default function AuctionDetailScreen() {
+export default function AuctionDetailRoute() {
   const { id } = useLocalSearchParams<'/auctions/[id]'>()
-  return (
-    <Screen>
-      <Text variant="h3">{id}</Text>
-    </Screen>
-  )
+  return <AuctionDetailScreen auctionId={id} />
 }

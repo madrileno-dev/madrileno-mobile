@@ -48,6 +48,18 @@ jest.mock('@shopify/flash-list', () => ({
   FlashList: jest.requireActual<typeof import('react-native')>('react-native').FlatList,
 }))
 
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual<unknown>('react-native-reanimated/mock'),
+)
+
+jest.mock('@rn-primitives/portal', () => ({
+  PortalHost: () => null,
+  Portal: ({ children }: { children: unknown }) => children,
+}))
+
+export const mockToast = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })
+jest.mock('sonner-native', () => ({ toast: mockToast, Toaster: () => null }))
+
 export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
 jest.mock('expo-router', () => {
   // Spread the actual module first: navTheme.ts imports DefaultTheme/DarkTheme
@@ -80,6 +92,9 @@ afterEach(() => {
   mockRouter.push.mockClear()
   mockRouter.replace.mockClear()
   mockRouter.back.mockClear()
+  mockToast.mockClear()
+  mockToast.success.mockClear()
+  mockToast.error.mockClear()
 })
 
 afterAll(() => {

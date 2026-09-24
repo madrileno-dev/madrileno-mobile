@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native'
-import { RootErrorBoundary } from '@/app/RootErrorBoundary'
+import { RootErrorBoundary } from '@/components/RootErrorBoundary'
 
 describe('RootErrorBoundary', () => {
   // Plain render, not renderWithProviders: Expo Router mounts this outside

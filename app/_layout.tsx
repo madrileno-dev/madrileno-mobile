@@ -15,7 +15,7 @@ import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 
-export { RootErrorBoundary as ErrorBoundary } from '@/app/RootErrorBoundary'
+export { RootErrorBoundary as ErrorBoundary } from '@/components/RootErrorBoundary'
 
 void SplashScreen.preventAutoHideAsync()
 

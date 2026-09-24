@@ -14,6 +14,7 @@ import { messages } from '@/i18n/config'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
 import { ThemeProvider } from '@/theme/ThemeProvider'
+import { useOtaUpdates } from '@/updates/useOtaUpdates'
 
 export { RootErrorBoundary as ErrorBoundary } from '@/components/RootErrorBoundary'
 
@@ -30,6 +31,7 @@ const configuredScheme = Constants.expoConfig?.scheme
 const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme
 
 export default function RootLayout() {
+  useOtaUpdates()
   const router = useRouter()
   const pathname = usePathname()
   // Kept in sync (via its own effect, not during render — see

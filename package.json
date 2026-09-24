@@ -1,6 +1,6 @@
 {
   "name": "madrileno-mobile",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -60,6 +60,7 @@
     "jest-expo": "^57.0.5",
     "msw": "^2.15.0",
     "prettier": "^3.9.9",
+    "sharp": "^0.35.4",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.1"
   },

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from './mswServer'
 
@@ -43,6 +44,22 @@ jest.mock('react-native-mmkv', () => {
   }
 })
 
+export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
+jest.mock('expo-router', () => {
+  // Spread the actual module first: navTheme.ts imports DefaultTheme/DarkTheme
+  // from expo-router at module scope, so those must stay real values.
+  const actual = jest.requireActual<object>('expo-router')
+  return {
+    ...actual,
+    useRouter: () => mockRouter,
+    useLocalSearchParams: () => ({}),
+    usePathname: () => '/',
+    Link: ({ children }: { children: ReactNode }) => children,
+    Redirect: () => null,
+    Stack: Object.assign(() => null, { Screen: () => null }),
+  }
+})
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
@@ -51,6 +68,9 @@ afterEach(() => {
   server.resetHandlers()
   secureStoreMock.clear()
   tokenStore.set(null)
+  mockRouter.push.mockClear()
+  mockRouter.replace.mockClear()
+  mockRouter.back.mockClear()
 })
 
 afterAll(() => {

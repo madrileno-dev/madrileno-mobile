@@ -33,4 +33,19 @@ describe('AuthLayout', () => {
     expect(mockRouter.replace).not.toHaveBeenCalled()
     await unmount()
   })
+
+  it('keeps redirecting to the same return-to target across re-renders while authenticated', async () => {
+    setReturnTo('/settings')
+    tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
+    const { rerender, unmount } = await render(<AuthLayout />)
+    // Redirect's href feeds an unmemoized useFocusEffect closure in the real
+    // component, so every re-render before navigation completes re-fires
+    // router.replace with whatever href that render computed. A second call
+    // to the one-shot consumeReturnTo() must not silently fall back to "/".
+    await rerender(<AuthLayout />)
+    await rerender(<AuthLayout />)
+    expect(mockRouter.replace).toHaveBeenCalledWith('/settings')
+    expect(mockRouter.replace).not.toHaveBeenCalledWith('/')
+    await unmount()
+  })
 })

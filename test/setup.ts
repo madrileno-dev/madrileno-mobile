@@ -1,3 +1,4 @@
+import { StyleSheet } from 'nativewind'
 import type { ReactNode } from 'react'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from './mswServer'
@@ -55,6 +56,20 @@ jest.mock('react-native-reanimated', () =>
 jest.mock('@rn-primitives/portal', () => ({
   PortalHost: () => null,
   Portal: ({ children }: { children: unknown }) => children,
+}))
+
+// Metro's css transform (which reads tailwind.config's darkMode: 'class' and
+// registers it as a nativewind flag) never runs under Jest, so
+// useColorScheme().setColorScheme would otherwise throw "Unable to manually
+// set color scheme without using darkMode: class".
+StyleSheet.registerCompiled({ $compiled: true, flags: { darkMode: 'class' } })
+
+jest.mock('expo-updates', () => ({
+  isEnabled: false,
+  updateId: null,
+  checkForUpdateAsync: jest.fn(),
+  fetchUpdateAsync: jest.fn(),
+  reloadAsync: jest.fn(),
 }))
 
 export const mockToast = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })

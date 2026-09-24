@@ -1,5 +1,8 @@
-import { Redirect, Stack, usePathname } from 'expo-router'
+import { Link, Redirect, Stack, usePathname } from 'expo-router'
+import { Settings as SettingsIcon } from 'lucide-react-native'
+import { Pressable } from 'react-native'
 import { useTranslations } from 'use-intl'
+import { Icon } from '@/components/ui/icon'
 import { setReturnTo } from '@/features/auth/returnTo'
 import { useAuth } from '@/features/auth/useAuth'
 
@@ -18,7 +21,19 @@ export default function AppLayout() {
   }
   return (
     <Stack screenOptions={{ headerLargeTitle: true }}>
-      <Stack.Screen name="index" options={{ title: indexTitle }} />
+      <Stack.Screen
+        name="index"
+        options={{
+          title: indexTitle,
+          headerRight: () => (
+            <Link href="/settings" asChild>
+              <Pressable accessibilityLabel={tNav('settings')} testID="open-settings" hitSlop={8}>
+                <Icon as={SettingsIcon} className="text-foreground" size={22} />
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
       <Stack.Screen name="settings" options={{ title: tNav('settings') }} />
       {/* mobile:auction-block-start */}
       <Stack.Screen name="auctions/[id]" options={{ title: '' }} />

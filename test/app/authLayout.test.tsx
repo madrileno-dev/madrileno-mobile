@@ -1,7 +1,8 @@
-import { render } from '@testing-library/react-native'
+import { act, render, renderHook } from '@testing-library/react-native'
 import AuthLayout from '../../app/(auth)/_layout'
-import { setReturnTo } from '@/features/auth/returnTo'
+import { consumeReturnTo, forgetReturnTo, setReturnTo } from '@/features/auth/returnTo'
 import { tokenStore } from '@/features/auth/tokenStore'
+import { useAuth } from '@/features/auth/useAuth'
 import { mockRouter } from '../setup'
 
 describe('AuthLayout', () => {
@@ -47,5 +48,53 @@ describe('AuthLayout', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/settings')
     expect(mockRouter.replace).not.toHaveBeenCalledWith('/')
     await unmount()
+  })
+
+  it("useAuth().logout() suppresses the app gate's next return-to recording", async () => {
+    tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
+    const { result, unmount } = await renderHook(() => useAuth())
+    await act(async () => {
+      result.current.logout()
+      // Drain any scheduler work the resulting tokenStore notification
+      // schedules, so it cannot bleed into the next test's render/act calls.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await unmount()
+    // This is exactly what app/(app)/_layout.tsx's gate does as a side
+    // effect of the resulting null session: `setReturnTo(pathname)`. That
+    // one-liner is covered by the gate's existing redirect-to-login
+    // behavior; what's under test here is that logout() suppressed it.
+    setReturnTo('/settings')
+    expect(consumeReturnTo()).toBeNull()
+  })
+
+  it('after a deliberate logout, the next login redirects to the auction list, not back to the previous screen', async () => {
+    // Simulate having been on Settings, then logging out from there — the
+    // exact sequence useAuth().logout() performs (forgetReturnTo() is
+    // covered on its own above).
+    setReturnTo('/settings')
+    forgetReturnTo()
+    tokenStore.set(null)
+    // The (app) gate's setReturnTo(pathname) call, fired as a side effect of
+    // the null session, must be suppressed.
+    setReturnTo('/settings')
+    expect(consumeReturnTo()).toBeNull()
+
+    // Simulate logging back in within the same app process.
+    tokenStore.set({ jwt: 'j2', refreshToken: 'r2', email: 'a@example.com' })
+    const { unmount } = await render(<AuthLayout />)
+    expect(mockRouter.replace).toHaveBeenCalledWith('/')
+    await unmount()
+  })
+
+  it('an involuntary session invalidation still records the return-to target', () => {
+    // A rejected refresh clears tokens directly (tokenStore.set(null)),
+    // without going through useAuth().logout() — so forgetReturnTo() is
+    // never called, and the gate's setReturnTo(pathname) call must NOT be
+    // suppressed.
+    tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
+    tokenStore.set(null)
+    setReturnTo('/settings')
+    expect(consumeReturnTo()).toBe('/settings')
   })
 })

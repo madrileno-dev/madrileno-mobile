@@ -4,7 +4,12 @@ import type { ReactElement } from 'react'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 
 export function renderWithProviders(ui: ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // gcTime: 0 so an inactive query's cache-eviction timer fires immediately on
+  // unmount instead of scheduling minutes out — Jest otherwise reports it as
+  // an open handle keeping the process alive.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  })
   return render(
     <QueryClientProvider client={queryClient}>
       <LocaleProvider>{ui}</LocaleProvider>

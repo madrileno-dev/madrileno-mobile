@@ -1,1 +1,3 @@
-export { HomeScreen as default } from '@/features/home/screens/HomeScreen'
+// mobile:auction-block-start
+export { AuctionListScreen as default } from '@/features/auctions/screens/AuctionListScreen'
+// mobile:auction-block-end

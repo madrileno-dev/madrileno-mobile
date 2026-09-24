@@ -44,6 +44,10 @@ jest.mock('react-native-mmkv', () => {
   }
 })
 
+jest.mock('@shopify/flash-list', () => ({
+  FlashList: jest.requireActual<typeof import('react-native')>('react-native').FlatList,
+}))
+
 export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
 jest.mock('expo-router', () => {
   // Spread the actual module first: navTheme.ts imports DefaultTheme/DarkTheme

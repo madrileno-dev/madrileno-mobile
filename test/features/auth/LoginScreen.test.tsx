@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native'
 import { http, HttpResponse } from 'msw'
-import { setReturnTo } from '@/features/auth/returnTo'
 import { LoginScreen } from '@/features/auth/screens/LoginScreen'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from '../../mswServer'
@@ -21,7 +20,7 @@ describe('LoginScreen', () => {
     expect(await screen.findByText('Enter a valid email address')).toBeTruthy()
   })
 
-  it('stores tokens and replaces the route on success', async () => {
+  it('stores tokens on success and leaves navigation to the auth layout', async () => {
     server.use(
       http.post(`${BASE}/v1/auth/dev`, () =>
         HttpResponse.json({ jwt: 'j', refreshToken: 'r', userCreated: true }),
@@ -31,19 +30,10 @@ describe('LoginScreen', () => {
     await submit('a@example.com')
     await waitFor(() => expect(tokenStore.get()?.jwt).toBe('j'))
     expect(tokenStore.get()?.email).toBe('a@example.com')
-    expect(mockRouter.replace).toHaveBeenCalledWith('/')
-  })
-
-  it('continues to the deep-linked screen after login', async () => {
-    setReturnTo('/auctions/abc')
-    server.use(
-      http.post(`${BASE}/v1/auth/dev`, () =>
-        HttpResponse.json({ jwt: 'j', refreshToken: 'r', userCreated: false }),
-      ),
-    )
-    await renderWithProviders(<LoginScreen />)
-    await submit('a@example.com')
-    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/auctions/abc'))
+    // Navigation on success is (auth)/_layout's job (see AuthLayout.test.tsx):
+    // it reacts to the token store and consumes the one-shot return-to value
+    // itself, so LoginScreen must not also call router.replace.
+    expect(mockRouter.replace).not.toHaveBeenCalled()
   })
 
   it('shows the Problem title when the backend rejects', async () => {

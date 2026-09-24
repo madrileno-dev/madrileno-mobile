@@ -10,8 +10,8 @@ export default function NotFound() {
       <Stack.Screen options={{ title: t('title') }} />
       <Screen className="items-center justify-center">
         <Text variant="h3">{t('heading')}</Text>
-        <Link href="/" className="text-primary">
-          {t('link')}
+        <Link href="/" asChild>
+          <Text className="text-primary">{t('link')}</Text>
         </Link>
       </Screen>
     </>

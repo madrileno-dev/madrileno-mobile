@@ -55,7 +55,12 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => ({}),
     usePathname: () => '/',
     Link: ({ children }: { children: ReactNode }) => children,
-    Redirect: () => null,
+    // A real <Redirect> performs a router.replace(href) as a side effect;
+    // mirror that so layouts that render one are testable via mockRouter.
+    Redirect: ({ href }: { href: unknown }) => {
+      mockRouter.replace(href)
+      return null
+    },
     Stack: Object.assign(() => null, { Screen: () => null }),
   }
 })

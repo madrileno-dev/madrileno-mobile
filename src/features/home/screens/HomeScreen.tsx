@@ -10,8 +10,8 @@ export function HomeScreen() {
     <Screen scroll>
       <Text variant="h3">{t('heading')}</Text>
       <Text variant="muted">{t('body')}</Text>
-      <Link href="/settings" className="text-primary">
-        {tNav('settings')}
+      <Link href="/settings" asChild>
+        <Text className="text-primary">{tNav('settings')}</Text>
       </Link>
     </Screen>
   )

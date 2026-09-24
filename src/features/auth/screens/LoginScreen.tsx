@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { View } from 'react-native'
@@ -11,7 +10,6 @@ import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
 import { Screen } from '@/components/Screen'
 import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
-import { consumeReturnTo } from '@/features/auth/returnTo'
 import { tokenStore } from '@/features/auth/tokenStore'
 
 interface LoginForm {
@@ -20,7 +18,6 @@ interface LoginForm {
 
 export function LoginScreen() {
   const t = useTranslations('login')
-  const router = useRouter()
   const [problem, setProblem] = useState<Problem | null>(null)
   const loginSchema = z.object({ email: z.string().email(t('emailInvalid')) })
   const {
@@ -33,8 +30,11 @@ export function LoginScreen() {
     setProblem(null)
     try {
       const res = await client.v1.auth.dev.post({ body: { email } })
+      // Navigating to the return-to target (or home) is (auth)/_layout's job:
+      // it reacts to the token store and consumes the one-shot return-to
+      // value itself, so there is exactly one navigation, not a race between
+      // this screen and the layout's own auth guard.
       tokenStore.set({ jwt: res.jwt, refreshToken: res.refreshToken, email })
-      router.replace(consumeReturnTo() ?? '/')
     } catch (error) {
       setProblem(problemFrom(error) ?? { type: 'unknown', status: 0, title: t('failed') })
     }

@@ -7,12 +7,14 @@ const name = pkg.name.replace(/-mobile$/, '')
 const scheme = name.replace(/[^a-z0-9]/gi, '').toLowerCase()
 const bundleId = `dev.${scheme}.mobile`
 const associatedDomain = process.env.EXPO_PUBLIC_ASSOCIATED_DOMAIN
+const easOwner = process.env.EAS_OWNER
 const easProjectId = process.env.EAS_PROJECT_ID
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name,
   slug: pkg.name,
+  ...(easOwner ? { owner: easOwner } : {}),
   scheme,
   version: pkg.version,
   orientation: 'portrait',

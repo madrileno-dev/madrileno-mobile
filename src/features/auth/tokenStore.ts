@@ -75,7 +75,7 @@ export const tokenStore = {
   },
 }
 
-export function registerAuthTokenProvider(): void {
+export function registerAuthTokenProvider(options?: { onSessionExpired?: () => void }): void {
   setTokenProvider({
     jwt: () => tokenStore.get()?.jwt,
     refreshToken: () => tokenStore.get()?.refreshToken,
@@ -85,6 +85,7 @@ export function registerAuthTokenProvider(): void {
     },
     invalidated: () => {
       tokenStore.set(null)
+      options?.onSessionExpired?.()
     },
   })
 }

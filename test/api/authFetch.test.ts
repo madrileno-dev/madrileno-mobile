@@ -1,5 +1,7 @@
+import { act, renderHook } from '@testing-library/react-native'
 import { http, HttpResponse } from 'msw'
 import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStore'
+import { useAuth } from '@/features/auth/useAuth'
 import { makeApiClient } from '@/api/orpc'
 import { server } from '../mswServer'
 
@@ -11,8 +13,11 @@ const REFRESHED = {
   userCreated: false,
 }
 
-beforeAll(() => {
-  registerAuthTokenProvider()
+let onSessionExpired: jest.Mock
+
+beforeEach(() => {
+  onSessionExpired = jest.fn()
+  registerAuthTokenProvider({ onSessionExpired })
 })
 
 function loggedIn() {
@@ -106,7 +111,7 @@ describe('the authorized fetch behind the oRPC client', () => {
     expect(tokenStore.get()?.refreshToken).toBe('11111111-1111-4111-8111-111111111111')
   })
 
-  it('logs out when the refresh call itself is rejected', async () => {
+  it('logs out and reports the session as expired when the refresh call itself is rejected', async () => {
     loggedIn()
     server.use(
       http.get(`${BASE}/v1/users/me`, reject401),
@@ -115,6 +120,7 @@ describe('the authorized fetch behind the oRPC client', () => {
 
     await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
     expect(tokenStore.get()).toBeNull()
+    expect(onSessionExpired).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the session when the refresh succeeds but the retried request is still 401', async () => {
@@ -128,6 +134,36 @@ describe('the authorized fetch behind the oRPC client', () => {
     // A fresh JWT refused by one route is a per-resource failure, not an expired session.
     expect(tokenStore.get()?.jwt).toBe('fresh-jwt')
     expect(tokenStore.get()?.refreshToken).toBe(REFRESHED.refreshToken)
+    expect(onSessionExpired).not.toHaveBeenCalled()
+  })
+
+  it('does not report the session as expired when the refresh endpoint fails transiently (5xx)', async () => {
+    loggedIn()
+    server.use(
+      usersMe401Until('fresh-jwt'),
+      http.post(`${BASE}/v1/auth/refresh-token`, () =>
+        HttpResponse.json(
+          { type: 'about:blank', status: 502, title: 'Upstream unavailable' },
+          { status: 502 },
+        ),
+      ),
+    )
+
+    await expect(makeApiClient(BASE).v1.users.me.get()).rejects.toThrow()
+    expect(onSessionExpired).not.toHaveBeenCalled()
+  })
+
+  it('does not report the session as expired on a deliberate logout', async () => {
+    loggedIn()
+    const { result, unmount } = await renderHook(() => useAuth())
+
+    await act(() => {
+      result.current.logout()
+    })
+    await unmount()
+
+    expect(tokenStore.get()).toBeNull()
+    expect(onSessionExpired).not.toHaveBeenCalled()
   })
 
   it('sends no bearer header when logged out', async () => {

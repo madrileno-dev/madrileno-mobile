@@ -16,6 +16,11 @@
     },
     "ios": {
       "bundleIdentifier": "dev.madrileno.mobile"
+    },
+    "extra": {
+      "router": {
+        "root": "app"
+      }
     }
   }
 }

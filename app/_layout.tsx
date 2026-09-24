@@ -7,14 +7,20 @@ import { Stack, usePathname, useRouter, type Href } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useRef } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { Toaster } from 'sonner-native'
+import { Toaster, toast } from 'sonner-native'
+import { createTranslator } from 'use-intl/core'
 import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStore'
+import { messages } from '@/i18n/config'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 
+export { RootErrorBoundary as ErrorBoundary } from '@/app/RootErrorBoundary'
+
 void SplashScreen.preventAutoHideAsync()
-registerAuthTokenProvider()
+
+const t = createTranslator({ locale: 'en', messages, namespace: 'error' })
+registerAuthTokenProvider({ onSessionExpired: () => toast.error(t('sessionExpired')) })
 
 const queryClient = new QueryClient()
 

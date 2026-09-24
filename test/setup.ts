@@ -49,7 +49,7 @@ jest.mock('@shopify/flash-list', () => ({
 }))
 
 jest.mock('react-native-reanimated', () =>
-  jest.requireActual<unknown>('react-native-reanimated/mock'),
+  jest.requireActual<object>('react-native-reanimated/mock'),
 )
 
 jest.mock('@rn-primitives/portal', () => ({

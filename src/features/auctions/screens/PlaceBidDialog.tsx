@@ -44,6 +44,14 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
     defaultValues: { amount: '' },
   })
 
+  const onOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) {
+      setRejection(null)
+      reset()
+    }
+  }
+
   const onSubmit = handleSubmit(({ amount }) => {
     setRejection(null)
     placeBid.mutate(
@@ -51,8 +59,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
       {
         onSuccess: () => {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          reset()
-          setOpen(false)
+          onOpenChange(false)
           toast.success(t('bidPlaced'))
         },
         onError: (error) => {
@@ -65,7 +72,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
   })
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button testID="bid-open" disabled={auction.status !== 'Open'}>
           <Text>{t('bidOpen')}</Text>
@@ -102,7 +109,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
           </Text>
         )}
         <DialogFooter className="flex-row justify-end gap-2">
-          <Button variant="outline" onPress={() => setOpen(false)}>
+          <Button variant="outline" onPress={() => onOpenChange(false)}>
             <Text>{t('bidCancel')}</Text>
           </Button>
           <Button testID="bid-submit" onPress={() => void onSubmit()} disabled={placeBid.isPending}>

@@ -80,6 +80,21 @@ describe('AuctionDetailScreen', () => {
     expect(await screen.findByText(/Bid too low — someone got there first/)).toBeTruthy()
   })
 
+  it('clears the rejection and amount when the dialog is cancelled and reopened', async () => {
+    server.use(
+      detailHandler,
+      http.get(bidsUrl, () => HttpResponse.json(bidsPageFixture([], false))),
+      http.post(bidsUrl, () => HttpResponse.json(bidTooLowProblem, { status: 409 })),
+    )
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await openDialogAndBid('120')
+    expect(await screen.findByTestId('bid-rejection')).toBeTruthy()
+    await fireEvent.press(screen.getByText('Cancel'))
+    await fireEvent.press(await screen.findByTestId('bid-open'))
+    expect(screen.queryByTestId('bid-rejection')).toBeNull()
+    expect((await screen.findByTestId('bid-amount')).props.value).toBe('')
+  })
+
   it('shows the error state when the auction does not exist', async () => {
     server.use(
       http.get(`${BASE}/v1/auctions/${AUCTION_ID}`, () =>

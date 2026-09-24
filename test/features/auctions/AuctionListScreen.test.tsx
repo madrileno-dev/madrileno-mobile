@@ -66,4 +66,16 @@ describe('AuctionListScreen', () => {
     expect(await screen.findByTestId('error-state')).toBeTruthy()
     expect(screen.getByText('Try again')).toBeTruthy()
   })
+
+  it('keeps the cached list and shows a banner when a refetch fails', async () => {
+    server.use(listHandler)
+    await renderWithProviders(<AuctionListScreen />)
+    expect(await screen.findByText('Château Margaux 2015')).toBeTruthy()
+
+    server.use(http.get(`${BASE}/v1/auctions`, () => HttpResponse.error()))
+    await fireEvent(screen.getByTestId('auction-list'), 'onRefresh')
+
+    expect(await screen.findByTestId('stale-banner')).toBeTruthy()
+    expect(screen.getByText('Château Margaux 2015')).toBeTruthy()
+  })
 })

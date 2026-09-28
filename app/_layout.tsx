@@ -13,6 +13,7 @@ import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStor
 import { messages } from '@/i18n/config'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
+import { initObservability } from '@/observability/otel'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { useOtaUpdates } from '@/updates/useOtaUpdates'
 
@@ -22,6 +23,7 @@ void SplashScreen.preventAutoHideAsync()
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'error' })
 registerAuthTokenProvider({ onSessionExpired: () => toast.error(t('sessionExpired')) })
+void initObservability()
 
 const queryClient = new QueryClient()
 

@@ -15,11 +15,9 @@ appId: dev.madrileno.mobile
     id: 'open-settings'
 - assertVisible: 'Signed in as maestro@example.com'
 - back
-- scrollUntilVisible:
-    element:
-      text: 'Open'
-    direction: DOWN
-- tapOn: 'Open'
+- tapOn:
+    id: 'auction-.*'
+    index: 0
 - extendedWaitUntil:
     visible: 'Bid history'
     timeout: 10000

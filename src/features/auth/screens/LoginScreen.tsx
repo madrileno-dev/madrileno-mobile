@@ -19,7 +19,7 @@ interface LoginForm {
 export function LoginScreen() {
   const t = useTranslations('login')
   const [problem, setProblem] = useState<Problem | null>(null)
-  const loginSchema = z.object({ email: z.string().email(t('emailInvalid')) })
+  const loginSchema = z.object({ email: z.email(t('emailInvalid')) })
   const {
     control,
     handleSubmit,

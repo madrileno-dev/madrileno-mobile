@@ -20,16 +20,26 @@ export function buildRumConfiguration(
   service: string,
   version: string,
 ): OpenObserveProviderConfiguration {
+  // The SDK appends /rum and /logs to customEndpoint itself; OpenObserve's RUM
+  // intake is per-org at /rum/v1/<org>, so that org path goes here.
+  const orgEndpoint = `${rum.endpoint.replace(/\/$/, '')}/rum/v1/${rum.org}`
   const configuration = new OpenObserveProviderConfiguration(
     rum.clientToken,
     rum.env,
     RUM_TRACKING_CONSENT,
     {
+      // The Android bridge's own OkHttp client rejects http:// uploads outright
+      // (independent of the app manifest's usesCleartextTraffic) unless this
+      // internal flag is set — see O2SdkImplementation.kt's DD_NEEDS_CLEAR_TEXT_HTTP /
+      // O2SdkNativeInitialization.kt's allowClearTextHttp(). No public API exposes it.
+      additionalConfiguration: rum.endpoint.startsWith('http://')
+        ? { '_o2.needsClearTextHttp': true }
+        : undefined,
       batchSize: BatchSize.MEDIUM,
       uploadFrequency: UploadFrequency.AVERAGE,
       rumConfiguration: {
         applicationId: rum.applicationId,
-        customEndpoint: rum.endpoint,
+        customEndpoint: orgEndpoint,
         // The SDK's onPress auto-instrumentation patches the active JSX runtime module, which
         // crashes against NativeWind's `createInteropElement` (a getter-only export); track taps
         // manually with O2Rum.addAction if needed instead.
@@ -42,8 +52,10 @@ export function buildRumConfiguration(
           { match: new URL(apiBaseUrl).hostname, propagatorTypes: [PropagatorType.TRACECONTEXT] },
         ],
       },
-      logsConfiguration: { customEndpoint: rum.endpoint },
-      traceConfiguration: { customEndpoint: rum.endpoint },
+      logsConfiguration: { customEndpoint: orgEndpoint },
+      // No traceConfiguration: the SDK's trace upload targets Datadog's /api/v2/spans, which
+      // OpenObserve's RUM intake doesn't accept; W3C trace propagation still comes from RUM's
+      // firstPartyHosts above.
     },
   )
   configuration.service = service

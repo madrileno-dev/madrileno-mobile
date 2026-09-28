@@ -19,12 +19,14 @@ describe('env', () => {
   const originalClientToken = process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN
   const originalEndpoint = process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT
   const originalApplicationId = process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID
+  const originalOrg = process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ORG
   const originalRumEnv = process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENV
 
   afterEach(() => {
     setOrDelete('EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN', originalClientToken)
     setOrDelete('EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT', originalEndpoint)
     setOrDelete('EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID', originalApplicationId)
+    setOrDelete('EXPO_PUBLIC_OPENOBSERVE_RUM_ORG', originalOrg)
     setOrDelete('EXPO_PUBLIC_OPENOBSERVE_RUM_ENV', originalRumEnv)
   })
 
@@ -46,24 +48,28 @@ describe('env', () => {
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN = 'test-token'
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT = 'http://10.0.2.2:55080'
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID = 'my-app'
+    process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ORG = 'acme'
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENV = 'staging'
 
     expect(loadEnv().env.rum).toEqual({
       clientToken: 'test-token',
       endpoint: 'http://10.0.2.2:55080',
       applicationId: 'my-app',
+      org: 'acme',
       env: 'staging',
     })
   })
 
-  it('defaults the application id and env when unset', () => {
+  it('defaults the application id, org and env when unset', () => {
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN = 'test-token'
     process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT = 'http://10.0.2.2:55080'
     delete process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID
+    delete process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ORG
     delete process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENV
 
     const rum = loadEnv().env.rum
     expect(rum?.applicationId).toBe('madrileno-mobile')
+    expect(rum?.org).toBe('default')
     expect(rum?.env).toEqual(expect.any(String))
   })
 })

@@ -126,3 +126,76 @@ describe('RumProvider', () => {
     expect(mockOpenObserveProvider).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('RUM fetch swap', () => {
+  const originalFetch = globalThis.fetch
+  const originalHeaders = globalThis.Headers
+  const originalRequest = globalThis.Request
+  const originalResponse = globalThis.Response
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    globalThis.Headers = originalHeaders
+    globalThis.Request = originalRequest
+    globalThis.Response = originalResponse
+  })
+
+  it("swaps globalThis.fetch/Headers/Request/Response to React Native's XHR-backed versions when RUM is enabled", () => {
+    const sentinelFetch = (() => {}) as unknown as typeof fetch
+    globalThis.fetch = sentinelFetch
+
+    // Mock RN's fetch module rather than letting it run for real: its real
+    // implementation installs onto the global only if nothing is already there
+    // (see node_modules/whatwg-fetch's `if (!g.fetch) { g.fetch = fetch }`), which
+    // makes the *real* module's behavior depend on load order in a way this
+    // isolated re-require doesn't reproduce faithfully. Mocking it removes that
+    // dependency and tests only what rum.tsx itself does with the module's exports.
+    const mockRnFetch = (() => {}) as unknown as typeof fetch
+    const mockHeaders = class {} as unknown as typeof Headers
+    const mockRequest = class {} as unknown as typeof Request
+    const mockResponse = class {} as unknown as typeof Response
+
+    jest.isolateModules(() => {
+      jest.doMock('@/env', () => ({
+        env: {
+          apiBaseUrl: 'http://10.0.2.2:9000',
+          rum: {
+            clientToken: 'test-token',
+            endpoint: 'http://10.0.2.2:55080',
+            applicationId: 'madrileno-mobile',
+            org: 'default',
+            env: 'development',
+          },
+        },
+      }))
+      jest.doMock('react-native/Libraries/Network/fetch', () => ({
+        fetch: mockRnFetch,
+        Headers: mockHeaders,
+        Request: mockRequest,
+        Response: mockResponse,
+      }))
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('@/observability/rum')
+    })
+
+    expect(globalThis.fetch).toBe(mockRnFetch)
+    expect(globalThis.Headers).toBe(mockHeaders)
+    expect(globalThis.Request).toBe(mockRequest)
+    expect(globalThis.Response).toBe(mockResponse)
+  })
+
+  it('leaves globalThis.fetch untouched when RUM is disabled', () => {
+    const sentinelFetch = (() => {}) as unknown as typeof fetch
+    globalThis.fetch = sentinelFetch
+
+    jest.isolateModules(() => {
+      jest.doMock('@/env', () => ({
+        env: { apiBaseUrl: 'http://10.0.2.2:9000', rum: null },
+      }))
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('@/observability/rum')
+    })
+
+    expect(globalThis.fetch).toBe(sentinelFetch)
+  })
+})

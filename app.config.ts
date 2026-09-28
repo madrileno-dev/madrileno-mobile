@@ -13,14 +13,21 @@ const easProjectId = process.env.EAS_PROJECT_ID
 // Kept in sync by hand with src/env.ts's EXPO_PUBLIC_API_BASE_URL default: Expo
 // loads this file as a standalone Node script at prebuild time and can't require
 // a sibling TypeScript module (there's no .ts require hook outside this entry file).
-const DEFAULT_API_BASE_URL = 'http://10.0.2.2:9000'
+export const DEFAULT_API_BASE_URL = 'http://10.0.2.2:9000'
 
 // Android blocks cleartext HTTP by default for targetSdk >= 28 in release builds.
-// Only allow it when the build's API base URL is itself http:// (e.g. the
-// emulator's http://10.0.2.2:9000 default) — an https:// API gets no cleartext
-// permission (Android's secure default stands).
-export function usesCleartext(apiBaseUrl: string | undefined): boolean {
-  return (apiBaseUrl || DEFAULT_API_BASE_URL).startsWith('http://')
+// Only allow it when the build's effective API base URL is itself http:// (e.g.
+// the emulator's http://10.0.2.2:9000 default) — an https:// API gets no
+// cleartext permission (Android's secure default stands). An EAS production
+// build never gets cleartext, even if EXPO_PUBLIC_API_BASE_URL is unset: falling
+// back to the http:// default there would fail open (silently allow cleartext
+// on a build that forgot to set the URL), so production must fail closed.
+export function usesCleartext(
+  apiBaseUrl: string | undefined,
+  buildProfile: string | undefined,
+): boolean {
+  if (buildProfile === 'production') return false
+  return /^http:\/\//i.test(apiBaseUrl || DEFAULT_API_BASE_URL)
 }
 
 const cleartextPlugin: [string, object] = [
@@ -83,7 +90,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         dark: { backgroundColor: '#0A0A0A' },
       },
     ],
-    ...(usesCleartext(process.env.EXPO_PUBLIC_API_BASE_URL) ? [cleartextPlugin] : []),
+    ...(usesCleartext(process.env.EXPO_PUBLIC_API_BASE_URL, process.env.EAS_BUILD_PROFILE)
+      ? [cleartextPlugin]
+      : []),
   ],
   extra: { ...(easProjectId ? { eas: { projectId: easProjectId } } : {}) },
 })

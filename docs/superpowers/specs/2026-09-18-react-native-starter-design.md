@@ -179,6 +179,12 @@ minimum tap targets, `accessibilityLabel` on icon-only buttons.
   `package.json`, so `init-project` renaming the package re-brands the app,
   like the web manifest. `owner` and `projectId` are read from env so the
   template ships without an EAS project bound to it.
+- **Android cleartext HTTP** (added 2026-09-28 after a device finding: release
+  builds block `http://` by default, and the template's default API URL is
+  `http://10.0.2.2:9000`). `app.config.ts` adds `expo-build-properties`
+  `android.usesCleartextTraffic` only when the build-time API URL is `http://`
+  (case-insensitive) **and** `EAS_BUILD_PROFILE` is not `production`; production
+  builds fail closed. A test pins the config's default URL to `src/env.ts`'s.
 - `src/updates/useOtaUpdates.ts`: `checkAutomatically: "NEVER"` in config,
   then an explicit `checkForUpdateAsync` on launch and on foreground
   (throttled to once per 5 minutes). **Consent gates the download, not the
@@ -224,11 +230,25 @@ counterpart of the web's `@openobserve/browser-rum`.
   is never initialised. No other credential goes in any `EXPO_PUBLIC_*`.
 - **What it captures**: sessions and views (Expo Router screens via
   `@openobserve/mobile-react-navigation` on the router's navigation ref),
-  user interactions, fetch/XHR resources, unhandled JS errors, and native
-  crashes (`nativeCrashReportEnabled`).
+  fetch/XHR resources, unhandled JS errors, and native crashes
+  (`nativeCrashReportEnabled`). Automatic tap/interaction tracking is **off**:
+  the SDK's interaction auto-instrumentation patches React's element creation
+  and crashes against NativeWind's JSX runtime; taps can be recorded manually
+  with `O2Rum.addAction`.
+- **Endpoint**: the native SDK sends the client token as an `O2-API-KEY`
+  header and appends `/rum` (and `/logs`) to its `customEndpoint`, so the app
+  composes `customEndpoint = ${EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT}/rum/v1/${org}`
+  with `EXPO_PUBLIC_OPENOBSERVE_RUM_ORG` (default `default`). For an `http://`
+  endpoint the SDK's own `_o2.needsClearTextHttp` flag is set (the SDK's HTTP
+  client refuses cleartext otherwise). The SDK's trace upload targets an
+  endpoint OpenObserve doesn't ingest, so no trace configuration is set.
 - **Distributed tracing**: the API host is listed in `firstPartyHosts` with
   the `tracecontext` propagator, so requests to the backend carry W3C
-  `traceparent` and continue into the backend's own traces in OpenObserve.
+  `traceparent` and continue into the backend's own traces in OpenObserve
+  (verified: a `/v1/auctions` RUM resource event and 17 backend spans share
+  one trace id). Expo SDK 57 installs its own native global `fetch`, which the
+  SDK's XHR instrumentation can't see, so when RUM is enabled — and only then —
+  the app switches `globalThis.fetch` back to React Native's XHR-backed fetch.
 - **Privacy**: session replay is not enabled by the template (documented as an
   opt-in follow-up); tracking consent defaults to granted and is exposed as a
   single place to change.

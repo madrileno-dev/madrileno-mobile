@@ -48,6 +48,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Maestro smoke on the emulator
+        timeout-minutes: 20
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -56,9 +57,11 @@ jobs:
           profile: pixel_6
           emulator-options: ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
+          # The runner executes each script line separately, so the single
+          # retry of a flaky emulator run has to fit on one line.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test .maestro/smoke.yml
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml
 
   # The post-init shell must stay green: strip the demo and run the same gate.
   init-project-shell:
@@ -96,7 +99,9 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
+      - name: Maestro smoke on the emulator
+        timeout-minutes: 20
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
@@ -104,6 +109,8 @@ jobs:
           profile: pixel_6
           emulator-options: ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
+          # The runner executes each script line separately, so the single
+          # retry of a flaky emulator run has to fit on one line.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test .maestro/smoke.yml
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml

@@ -25,7 +25,7 @@ generates.
 | Auth | Dev login only (`POST /v1/auth/dev`) | Parity with web; Apple/Google need accounts we don't have |
 | UI | react-native-reusables on NativeWind 4 | shadcn's approach and token palette on mobile; vendored primitives |
 | Native extras | EAS build profiles + EAS Update (OTA), deep links (scheme; https links prepared) | The mobile counterparts of the PWA update prompt and routing |
-| Observability | OpenTelemetry (JS web SDK) → OpenObserve, opt-in | Traces continue into the backend's own OTel traces; same store as web |
+| Observability | OpenObserve React Native RUM SDK (`@openobserve/mobile-react-native`), opt-in | Public RUM client token like the web; W3C `traceparent` continues into the backend's traces; same store as web (revised 2026-09-28, see Observability) |
 | E2E / CI | Maestro smoke on a GitHub-hosted Android emulator | Mirrors the web's Playwright smoke |
 | Unit tests | jest-expo + React Native Testing Library + MSW | Vitest is a poor fit for RN |
 | Package manager | pnpm (hoisted `nodeLinker`) | Same as web; Expo's default for pnpm |
@@ -56,7 +56,7 @@ madrileno-mobile/
     components/                 Field composition, Screen (safe-area wrapper), ErrorState, EmptyState, Skeleton
     i18n/                       messages/en.json, LocaleProvider, use-intl.d.ts
     theme/                      useColorScheme (system + MMKV override), tokens
-    observability/              otel.ts (opt-in)
+    observability/              rum.tsx (opt-in)
     updates/                    useOtaUpdates.ts (check + reload toast)
   assets/                       icon.svg (source), splash.svg, generated PNGs not committed
   test/                         setup.ts, mswServer.ts, api/, features/
@@ -204,51 +204,39 @@ minimum tap targets, `accessibilityLabel` on icon-only buttons.
 
 ## Observability (opt-in)
 
-`src/observability/otel.ts` is imported lazily from the root layout only when
-`EXPO_PUBLIC_OTEL_ENDPOINT` is set (plus `EXPO_PUBLIC_OTEL_SERVICE_NAME`,
-default the package name).
+Revised 2026-09-28 after device verification. The original design sent OTLP
+from the OpenTelemetry JS SDK straight to OpenObserve, authenticated by an
+"ingest-only token". OpenObserve's OTLP endpoint accepts only Basic account
+credentials (probed: no auth → 401, `Bearer <token>` → 401, Basic → 200), so
+that design could not work without shipping a real credential in the binary.
 
-**No credential ever goes in an `EXPO_PUBLIC_*` variable.** Expo inlines those
-into the JS bundle at build time, and a shipped `.apk` or `.ipa` is a
-downloadable archive, so anything in one is public and cannot be revoked per
-user. That rules out an OpenObserve Basic-auth header, which is an account
-credential with read access — a strictly worse exposure than the web's
-`VITE_OPENOBSERVE_RUM_CLIENT_TOKEN`, which is a purpose-built write-only RUM
-ingestion token meant to sit in a browser bundle. Two supported endpoints,
-neither of which embeds a secret:
+**Decision (user, 2026-09-28): use OpenObserve's own React Native RUM SDK**,
+`@openobserve/mobile-react-native` (beta, pinned exactly), the mobile
+counterpart of the web's `@openobserve/browser-rum`.
 
-- **Default — ingest-only token.** `EXPO_PUBLIC_OTEL_INGEST_TOKEN` holds an
-  OpenObserve token scoped to write into one stream, with no read and no admin
-  rights, exactly the class of credential the web already ships. The README
-  states plainly that it is public, that it must not be an account password,
-  and how to rotate it. The blast radius of a leak is junk telemetry in one
-  stream.
-- **Hardened — backend forward.** Point `EXPO_PUBLIC_OTEL_ENDPOINT` at the
-  backend and let it forward to OpenObserve with server-side credentials,
-  reusing the bearer token the app already sends. The app needs no telemetry
-  credential at all and unauthenticated spam is rejected. This needs a
-  collector route in the Scala repo, so it is documented here and listed as a
-  backend follow-up, not built in this one.
-
-- `WebTracerProvider` from `@opentelemetry/sdk-trace-web`, resource with
-  service name / version, OS name+version, device model
-  (`expo-device`), and a `session.id` attribute added by a span processor
-  (UUID per app launch).
-- `FetchInstrumentation` with the two RN workarounds from the OTel demo:
-  `propagateTraceHeaderCorsUrls: /.*/`, `clearTimingResources: false`; and
-  `XMLHttpRequestInstrumentation` ignoring the API base URL so spans are not
-  duplicated by the fetch polyfill.
-- `W3CTraceContextPropagator` + `W3CBaggagePropagator`, so a tap continues
-  into the backend's trace in OpenObserve.
-- `BatchSpanProcessor` → `OTLPTraceExporter` (HTTP/JSON). Flushed on
-  `AppState` background.
-- **JS errors**: `ErrorUtils.setGlobalHandler` wraps the default handler and
-  emits a log record (`severity: ERROR`, stack, `session.id`) through
-  `OTLPLogExporter` (`@opentelemetry/sdk-logs`). Unhandled promise rejections
-  are hooked the same way. No native crash capture; README names Sentry as
-  the alternative.
-- Versions of the OTel packages are pinned exactly (no caret) because the JS
-  SDK is not officially supported on RN; README calls this out.
+- **Credential**: a RUM **client token** (OpenObserve → Ingestion → RUM),
+  write-only for RUM data and designed to be embedded in client apps — the
+  same class of token the web ships as `VITE_OPENOBSERVE_RUM_CLIENT_TOKEN`.
+  Configured via `EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN`,
+  `EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT` (instance base URL),
+  `EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID`, optional
+  `EXPO_PUBLIC_OPENOBSERVE_RUM_ENV`. Opt-in: with no client token set the SDK
+  is never initialised. No other credential goes in any `EXPO_PUBLIC_*`.
+- **What it captures**: sessions and views (Expo Router screens via
+  `@openobserve/mobile-react-navigation` on the router's navigation ref),
+  user interactions, fetch/XHR resources, unhandled JS errors, and native
+  crashes (`nativeCrashReportEnabled`).
+- **Distributed tracing**: the API host is listed in `firstPartyHosts` with
+  the `tracecontext` propagator, so requests to the backend carry W3C
+  `traceparent` and continue into the backend's own traces in OpenObserve.
+- **Privacy**: session replay is not enabled by the template (documented as an
+  opt-in follow-up); tracking consent defaults to granted and is exposed as a
+  single place to change.
+- **Native module**: the SDK wraps native Android/iOS SDKs, so it needs a
+  development/EAS build, not Expo Go. It autolinks through `expo prebuild`.
+- **Beta risk**: pinned exactly; the README names Sentry as the swap if the
+  beta SDK blocks an Expo/RN upgrade.
+- The OpenTelemetry JS implementation from Task 10 is removed.
 
 ## Error handling
 
@@ -279,7 +267,7 @@ neither of which embeds a secret:
   test) plus both expiry branches (refresh rejected → invalidated; retry 401 → session kept), `tokenStore` hydration, write serialization, and that no disk read follows hydration, `LoginScreen` (validation,
   Problem display, navigation), `AuctionListScreen` and `AuctionDetailScreen`
   against typed MSW handlers (list, empty, error, bid too low), `useOtaUpdates`
-  (prompts before fetching, downloads nothing when declined, throttles), `otel` init is a no-op without
+  (prompts before fetching, downloads nothing when declined, throttles), RUM init is a no-op without
   the env var. Handlers typed against the contract as on the web.
 - **Maestro**: `.maestro/smoke.yml` launches the app and asserts the login
   screen (backend-free, survives init-project). `.maestro/auctions.yml` logs
@@ -340,7 +328,7 @@ CI proves the post-init shell builds and passes the smoke.
 `README.md` follows the web README's structure, with no hero image: the
 contract loop, quick start (Android emulator, `10.0.2.2`), the auth story, EAS profiles and OTA,
 deep links, observability, security notes (secure store, dev auth gated by
-`DEV_AUTH_ENABLED`, no CSP equivalent, pinned OTel packages), conventions,
+`DEV_AUTH_ENABLED`, no CSP equivalent, pinned beta RUM SDK), conventions,
 starting a real project, scripts table, license. Out-of-scope items each get a
 "how to add" paragraph.
 
@@ -356,7 +344,7 @@ the backend describing the pairing, like `docs/frontend.md`.
 | --- | --- |
 | Temporal / oRPC on Hermes | Spike first; fallback documented before UI work |
 | NativeWind / Reanimated / Expo pin drift | Exact pins for the fragile trio; `expo install --fix` documented in the update section |
-| OTel JS SDK unsupported on RN | Exact pins; feature is opt-in and isolated in one module; Sentry named as swap |
+| RUM SDK is beta (0.1.x) with native modules | Exact pin; opt-in and isolated in one module; Sentry named as swap |
 | GitHub emulator flakiness | Single short smoke flow, the Maestro step retried once, EAS Workflows documented |
 | iOS unverified | Stated in README; prebuild + typecheck gate config errors |
 | Telemetry token is public by construction | Ingest-only scope, rotation documented, backend-forward option for anyone who needs secrecy |
@@ -432,6 +420,6 @@ is `../madrileno-frontend`.
   emulator (the API defaults to `http://10.0.2.2:9000`, the emulator's alias
   for the host's backend). iOS builds go through `eas build`; there is no Mac
   in the loop, so state clearly when something is unverified on iOS.
-- OTA updates and OTel are opt-in via env and inert in dev; don't add code
+- OTA updates and RUM are opt-in via env and inert in dev; don't add code
   paths that assume they're on.
 ```

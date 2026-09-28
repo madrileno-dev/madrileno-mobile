@@ -15,10 +15,16 @@ describe('returnTo', () => {
   it('forgetReturnTo clears any stored href and suppresses exactly the next setReturnTo call', () => {
     setReturnTo('/settings')
     forgetReturnTo()
-    expect(consumeReturnTo()).toBeNull()
     setReturnTo('/auctions/abc')
     expect(consumeReturnTo()).toBeNull()
     setReturnTo('/auctions/def')
     expect(consumeReturnTo()).toBe('/auctions/def')
+  })
+
+  it('consumeReturnTo disarms a pending suppression so a later capture is kept', () => {
+    forgetReturnTo()
+    expect(consumeReturnTo()).toBeNull()
+    setReturnTo('/auctions/abc')
+    expect(consumeReturnTo()).toBe('/auctions/abc')
   })
 })

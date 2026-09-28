@@ -26,6 +26,9 @@ export function setReturnTo(pathname: string): void {
 export function consumeReturnTo(): Href | null {
   const next = href
   href = null
+  // A login has happened, so any suppression armed by the last logout is
+  // spent; left armed it would swallow the next legitimate capture.
+  suppressNext = false
   return next
 }
 

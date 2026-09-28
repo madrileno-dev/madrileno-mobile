@@ -31,6 +31,10 @@ const configuredScheme = Constants.expoConfig?.scheme
 // declares one.
 const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme
 
+// Boot work runs once per app process: the token store must never re-read
+// the keychain after hydrating, whatever happens to the router's identity.
+let booted = false
+
 export default function RootLayout() {
   useOtaUpdates()
   useRumNavigationTracking()
@@ -48,6 +52,8 @@ export default function RootLayout() {
   }, [pathname])
 
   useEffect(() => {
+    if (booted) return
+    booted = true
     // On Android, expo-router's cold-start initial-route resolution never
     // sees a bare `<scheme>://host` deep link's target for this app's own
     // scheme (it always resolves to "/"), even though the OS intent carries

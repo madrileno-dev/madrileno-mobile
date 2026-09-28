@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+// Kept in sync by hand with app.config.ts's DEFAULT_API_BASE_URL: app.config.ts
+// runs as a standalone Node script at prebuild time and cannot import this
+// module (or anything else under src/) there.
 const schema = z.object({
   EXPO_PUBLIC_API_BASE_URL: z.string().optional().default('http://10.0.2.2:9000'),
   EXPO_PUBLIC_OTEL_ENDPOINT: z.string().optional(),

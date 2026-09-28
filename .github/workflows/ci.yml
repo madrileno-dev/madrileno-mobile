@@ -83,6 +83,7 @@ jobs:
       - run: pnpm run routes:types
       - run: pnpm run typecheck
       - run: pnpm run lint
+      - run: pnpm run format:check
       - run: pnpm test
       - uses: actions/setup-java@v4
         with:

@@ -95,7 +95,9 @@ console.log('Deleted the auction demo (feature, routes, tests, Maestro flow)')
 if (licenseDeleted) console.log('Deleted LICENSE (generated projects may relicense freely)')
 console.log(`Stripped auction blocks from ${stripped} file(s)`)
 if (name)
-  console.log(`Renamed package to ${name}-mobile (app name, slug, scheme, bundle id and Maestro appId follow)`)
+  console.log(
+    `Renamed package to ${name}-mobile (app name, slug, scheme, bundle id and Maestro appId follow)`,
+  )
 console.log()
 console.log('Next:')
 console.log('  pnpm run typecheck && pnpm run lint && pnpm run test')

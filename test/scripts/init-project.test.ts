@@ -17,9 +17,13 @@ function copyRepo(): string {
 
 function grepMarkers(dir: string): string {
   try {
-    return execFileSync('grep', ['-rl', 'auction-block', path.join(dir, 'app'), path.join(dir, 'src')], {
-      encoding: 'utf-8',
-    })
+    return execFileSync(
+      'grep',
+      ['-rl', 'auction-block', path.join(dir, 'app'), path.join(dir, 'src')],
+      {
+        encoding: 'utf-8',
+      },
+    )
   } catch {
     return '' // grep exits 1 when nothing matches
   }

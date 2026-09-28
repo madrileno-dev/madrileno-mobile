@@ -96,8 +96,11 @@ distribution), `preview` (internal APK, channel `preview`), `production`
 `version` (`package.json`) matches.
 
 The template ships with no EAS project bound to it. Run `eas init` once,
-then set `EAS_OWNER` and `EAS_PROJECT_ID` in the environment (build-time
-only, not `EXPO_PUBLIC_*` — no secret) so `app.config.ts` picks them up.
+then set `EAS_OWNER` and `EAS_PROJECT_ID` (build-time only, not
+`EXPO_PUBLIC_*` — no secret) so `app.config.ts` picks them up: in your shell
+or `.env` for local commands, and as
+[EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
+for cloud builds — the gitignored `.env` never reaches EAS Build.
 
 ```bash
 pnpm run build:preview      # eas build --profile preview
@@ -128,9 +131,10 @@ package name (`app.config.ts`).
 adb shell am start -a android.intent.action.VIEW -d "madrileno://settings"
 ```
 
-A cold-start deep link into an authed route lands on `/login` first (the
-auth gate hasn't hydrated yet) and continues to the original target after
-login — the target is captured in memory only, never persisted.
+A deep link into an authed route while logged out lands on `/login` (the
+auth gate waits for the token store to hydrate, finds no session and
+redirects) and continues to the original target after login — the target is
+captured in memory only, never persisted.
 
 Universal / App Links (`https://` links that open the app instead of a
 browser) are prepared behind `EXPO_PUBLIC_ASSOCIATED_DOMAIN`: set it and

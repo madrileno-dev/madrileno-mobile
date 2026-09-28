@@ -9,7 +9,7 @@ import {
 import { O2RumReactNavigationTracking } from '@openobserve/mobile-react-navigation'
 import Constants from 'expo-constants'
 import { useNavigationContainerRef } from 'expo-router'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { env, type RumConfig } from '@/env'
 
 if (env.rum !== null) {
@@ -84,14 +84,20 @@ export function buildRumConfiguration(
 }
 
 export function RumProvider({ children }: { children: ReactNode }) {
-  if (env.rum === null) return <>{children}</>
-
-  const configuration = buildRumConfiguration(
-    env.rum,
-    env.apiBaseUrl,
-    Constants.expoConfig?.slug ?? 'madrileno-mobile',
-    Constants.expoConfig?.version ?? '0.0.0',
+  // Everything it reads is fixed at startup; RootLayout re-renders on every navigation.
+  const configuration = useMemo(
+    () =>
+      env.rum === null
+        ? null
+        : buildRumConfiguration(
+            env.rum,
+            env.apiBaseUrl,
+            Constants.expoConfig?.slug ?? 'madrileno-mobile',
+            Constants.expoConfig?.version ?? '0.0.0',
+          ),
+    [],
   )
+  if (configuration === null) return <>{children}</>
   return <OpenObserveProvider configuration={configuration}>{children}</OpenObserveProvider>
 }
 

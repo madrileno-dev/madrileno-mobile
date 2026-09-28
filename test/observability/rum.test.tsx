@@ -95,7 +95,11 @@ describe('RumProvider', () => {
 
   it('mounts OpenObserveProvider when env.rum is configured', async () => {
     let FreshRumProvider: typeof import('@/observability/rum').RumProvider | undefined
+    const outerReact = jest.requireActual<typeof import('react')>('react')
     jest.isolateModules(() => {
+      // The isolated registry would otherwise load a second React whose hooks
+      // have no dispatcher under the outer renderer.
+      jest.doMock('react', () => outerReact)
       jest.doMock('@/env', () => ({
         env: {
           apiBaseUrl: 'http://10.0.2.2:9000',
@@ -116,7 +120,7 @@ describe('RumProvider', () => {
     })
     if (FreshRumProvider === undefined) throw new Error('RumProvider did not load')
 
-    const { getByText } = await render(
+    const { getByText, rerender } = await render(
       <FreshRumProvider>
         <Text>hello</Text>
       </FreshRumProvider>,
@@ -124,6 +128,17 @@ describe('RumProvider', () => {
 
     expect(getByText('hello')).toBeTruthy()
     expect(mockOpenObserveProvider).toHaveBeenCalledTimes(1)
+
+    await rerender(
+      <FreshRumProvider>
+        <Text>hello again</Text>
+      </FreshRumProvider>,
+    )
+    expect(mockOpenObserveProvider).toHaveBeenCalledTimes(2)
+    const [first, second] = mockOpenObserveProvider.mock.calls.map(
+      ([props]) => (props as { configuration?: unknown }).configuration,
+    )
+    expect(second).toBe(first)
   })
 })
 

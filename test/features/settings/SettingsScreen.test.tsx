@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react-native'
+import AppLayout from '../../../app/(app)/_layout'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { SettingsScreen } from '@/features/settings/screens/SettingsScreen'
 import { readThemePreference } from '@/theme/preferences'
@@ -28,10 +29,19 @@ describe('SettingsScreen', () => {
     await unmount()
   })
 
-  it('logs out and returns to login', async () => {
-    const { unmount } = await renderWithProviders(<SettingsScreen />)
+  it('logs out and leaves the redirect to login to the (app) gate', async () => {
+    await tokenStore.hydrate()
+    tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
+    const { unmount } = await renderWithProviders(
+      <>
+        <AppLayout />
+        <SettingsScreen />
+      </>,
+    )
+    expect(mockRouter.replace).not.toHaveBeenCalled()
     await fireEvent.press(screen.getByTestId('logout'))
     expect(tokenStore.get()).toBeNull()
+    expect(mockRouter.replace).toHaveBeenCalledTimes(1)
     expect(mockRouter.replace).toHaveBeenCalledWith('/login')
     await unmount()
   })

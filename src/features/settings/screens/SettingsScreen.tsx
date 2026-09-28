@@ -1,5 +1,4 @@
 import Constants from 'expo-constants'
-import { useRouter } from 'expo-router'
 import * as Updates from 'expo-updates'
 import { View } from 'react-native'
 import { useTranslations } from 'use-intl'
@@ -17,7 +16,6 @@ export function SettingsScreen() {
   const t = useTranslations('settings')
   const tTheme = useTranslations('theme')
   const tNav = useTranslations('nav')
-  const router = useRouter()
   const { tokens, logout } = useAuth()
   const { preference, setPreference } = useThemePreference()
 
@@ -33,20 +31,14 @@ export function SettingsScreen() {
             variant={preference === p ? 'default' : 'outline'}
             onPress={() => setPreference(p)}
             testID={`theme-${p}`}
+            className="h-11 sm:h-11"
           >
             <Text>{tTheme(p)}</Text>
           </Button>
         ))}
       </View>
       <Separator />
-      <Button
-        variant="destructive"
-        testID="logout"
-        onPress={() => {
-          logout()
-          router.replace('/login')
-        }}
-      >
+      <Button variant="destructive" testID="logout" onPress={logout}>
         <Text>{tNav('logOut')}</Text>
       </Button>
       <Text variant="muted" className="mt-8">

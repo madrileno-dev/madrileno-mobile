@@ -1,0 +1,8 @@
+appId: dev.madrileno.mobile
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'login-email'
+- assertVisible:
+    id: 'login-submit'

@@ -1,4 +1,9 @@
 import { env } from '@/env'
+import type { ErrorRecord } from './errors'
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 // Lazy: none of the OTel packages load unless EXPO_PUBLIC_OTEL_ENDPOINT is set.
 // The JS OTel SDK is not officially supported on React Native (hence the exact
@@ -23,7 +28,7 @@ export async function initObservability(): Promise<void> {
     Device,
     Crypto,
     { AppState },
-    { installErrorReporting },
+    { installErrorReporting, installRejectionReporting },
   ] = await Promise.all([
     import('@opentelemetry/api'),
     import('@opentelemetry/api-logs'),
@@ -69,15 +74,21 @@ export async function initObservability(): Promise<void> {
     }),
   )
 
+  const otelEndpointPattern = new RegExp(escapeRegExp(cfg.endpoint))
+  const apiBaseUrlPattern = new RegExp(escapeRegExp(env.apiBaseUrl))
+
   registerInstrumentations({
     instrumentations: [
       new FetchInstrumentation({
         // RN's fetch is a polyfill over XMLHttpRequest, not real CORS: always propagate.
         propagateTraceHeaderCorsUrls: /.*/,
         clearTimingResources: false,
+        // Don't trace the exporters' own POSTs to the collector.
+        ignoreUrls: [otelEndpointPattern],
       }),
-      // …and ignore the API in the XHR layer so each call yields one span, not two.
-      new XMLHttpRequestInstrumentation({ ignoreUrls: [new RegExp(env.apiBaseUrl)] }),
+      // …and ignore the API in the XHR layer so each call yields one span, not
+      // two, plus the collector endpoint for the same reason as above.
+      new XMLHttpRequestInstrumentation({ ignoreUrls: [apiBaseUrlPattern, otelEndpointPattern] }),
     ],
   })
 
@@ -92,7 +103,7 @@ export async function initObservability(): Promise<void> {
   logs.setGlobalLoggerProvider(loggerProvider)
   const logger = logs.getLogger(cfg.serviceName)
 
-  installErrorReporting((record) => {
+  const reportError = (record: ErrorRecord) => {
     logger.emit({
       severityNumber: SeverityNumber.ERROR,
       severityText: 'ERROR',
@@ -100,11 +111,15 @@ export async function initObservability(): Promise<void> {
       attributes: {
         'exception.stacktrace': record.stack ?? '',
         'error.fatal': record.isFatal,
+        'error.unhandled_rejection': record.unhandledRejection === true,
         'session.id': sessionId,
       },
     })
     if (record.isFatal) void loggerProvider.forceFlush()
-  })
+  }
+
+  installErrorReporting(reportError)
+  installRejectionReporting(reportError)
 
   AppState.addEventListener('change', (state) => {
     if (state === 'background') {

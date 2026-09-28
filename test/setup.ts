@@ -1,5 +1,5 @@
 import { StyleSheet } from 'nativewind'
-import type { ReactNode } from 'react'
+import { createElement, Fragment, type ReactNode } from 'react'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from './mswServer'
 
@@ -72,6 +72,51 @@ jest.mock('expo-updates', () => ({
   reloadAsync: jest.fn(),
 }))
 
+// Real @openobserve/mobile-react-native exports drag in TurboModule specs;
+// stand in for the whole module so no native module loads under Jest.
+// OpenObserveProviderConfiguration stays a real-ish class (plain field copy)
+// so tests can inspect the shape buildRumConfiguration produces.
+export const mockOpenObserveProvider = jest.fn((props: { children?: ReactNode }) =>
+  createElement(Fragment, null, props.children),
+)
+jest.mock('@openobserve/mobile-react-native', () => {
+  class MockOpenObserveProviderConfiguration {
+    clientToken: string
+    env: string
+    trackingConsent: string
+    service: string | undefined
+    version: string | undefined
+    constructor(
+      clientToken: string,
+      env: string,
+      trackingConsent: string,
+      options: Record<string, unknown> = {},
+    ) {
+      this.clientToken = clientToken
+      this.env = env
+      this.trackingConsent = trackingConsent
+      Object.assign(this, options)
+    }
+  }
+  return {
+    TrackingConsent: { GRANTED: 'granted', PENDING: 'pending', NOT_GRANTED: 'not_granted' },
+    BatchSize: { SMALL: 'SMALL', MEDIUM: 'MEDIUM', LARGE: 'LARGE' },
+    UploadFrequency: { RARE: 'RARE', AVERAGE: 'AVERAGE', FREQUENT: 'FREQUENT' },
+    PropagatorType: { TRACECONTEXT: 'tracecontext', B3: 'b3', B3MULTI: 'b3multi' },
+    OpenObserveProviderConfiguration: MockOpenObserveProviderConfiguration,
+    OpenObserveProvider: (props: { children?: ReactNode }) => mockOpenObserveProvider(props),
+  }
+})
+
+export const mockStartTrackingViews = jest.fn()
+export const mockStopTrackingViews = jest.fn()
+jest.mock('@openobserve/mobile-react-navigation', () => ({
+  O2RumReactNavigationTracking: {
+    startTrackingViews: mockStartTrackingViews,
+    stopTrackingViews: mockStopTrackingViews,
+  },
+}))
+
 export const mockToast = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })
 jest.mock('sonner-native', () => ({ toast: mockToast, Toaster: () => null }))
 
@@ -110,6 +155,9 @@ afterEach(() => {
   mockToast.mockClear()
   mockToast.success.mockClear()
   mockToast.error.mockClear()
+  mockOpenObserveProvider.mockClear()
+  mockStartTrackingViews.mockClear()
+  mockStopTrackingViews.mockClear()
 })
 
 afterAll(() => {

@@ -5,34 +5,40 @@ import { z } from 'zod'
 // module (or anything else under src/) there.
 const schema = z.object({
   EXPO_PUBLIC_API_BASE_URL: z.string().optional().default('http://10.0.2.2:9000'),
-  EXPO_PUBLIC_OTEL_ENDPOINT: z.string().optional(),
-  EXPO_PUBLIC_OTEL_INGEST_TOKEN: z.string().optional(),
-  EXPO_PUBLIC_OTEL_SERVICE_NAME: z.string().optional(),
+  EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN: z.string().optional(),
+  EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT: z.string().optional(),
+  EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID: z.string().optional(),
+  EXPO_PUBLIC_OPENOBSERVE_RUM_ENV: z.string().optional(),
 })
 
 // Expo inlines EXPO_PUBLIC_* at build time; read them once, here, so a typo is
 // one place to fix and the rest of the app sees a typed object.
 const raw = schema.parse({
   EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
-  EXPO_PUBLIC_OTEL_ENDPOINT: process.env.EXPO_PUBLIC_OTEL_ENDPOINT,
-  EXPO_PUBLIC_OTEL_INGEST_TOKEN: process.env.EXPO_PUBLIC_OTEL_INGEST_TOKEN,
-  EXPO_PUBLIC_OTEL_SERVICE_NAME: process.env.EXPO_PUBLIC_OTEL_SERVICE_NAME,
+  EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN: process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN,
+  EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT: process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT,
+  EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID:
+    process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID,
+  EXPO_PUBLIC_OPENOBSERVE_RUM_ENV: process.env.EXPO_PUBLIC_OPENOBSERVE_RUM_ENV,
 })
 
-export interface OtelConfig {
+export interface RumConfig {
+  clientToken: string
   endpoint: string
-  ingestToken: string | undefined
-  serviceName: string
+  applicationId: string
+  env: string
 }
 
-export const env: { apiBaseUrl: string; otel: OtelConfig | null } = {
+export const env: { apiBaseUrl: string; rum: RumConfig | null } = {
   apiBaseUrl: raw.EXPO_PUBLIC_API_BASE_URL,
-  otel:
-    raw.EXPO_PUBLIC_OTEL_ENDPOINT !== undefined
+  rum:
+    raw.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN !== undefined &&
+    raw.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT !== undefined
       ? {
-          endpoint: raw.EXPO_PUBLIC_OTEL_ENDPOINT,
-          ingestToken: raw.EXPO_PUBLIC_OTEL_INGEST_TOKEN,
-          serviceName: raw.EXPO_PUBLIC_OTEL_SERVICE_NAME ?? 'madrileno-mobile',
+          clientToken: raw.EXPO_PUBLIC_OPENOBSERVE_RUM_CLIENT_TOKEN,
+          endpoint: raw.EXPO_PUBLIC_OPENOBSERVE_RUM_ENDPOINT,
+          applicationId: raw.EXPO_PUBLIC_OPENOBSERVE_RUM_APPLICATION_ID ?? 'madrileno-mobile',
+          env: raw.EXPO_PUBLIC_OPENOBSERVE_RUM_ENV ?? (__DEV__ ? 'development' : 'production'),
         }
       : null,
 }

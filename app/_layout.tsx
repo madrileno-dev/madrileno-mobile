@@ -13,7 +13,7 @@ import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStor
 import { messages } from '@/i18n/config'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
 import { resolveColdStartTarget } from '@/lib/resolveColdStartTarget'
-import { initObservability } from '@/observability/otel'
+import { RumProvider, useRumNavigationTracking } from '@/observability/rum'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { useOtaUpdates } from '@/updates/useOtaUpdates'
 
@@ -23,7 +23,6 @@ void SplashScreen.preventAutoHideAsync()
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'error' })
 registerAuthTokenProvider({ onSessionExpired: () => toast.error(t('sessionExpired')) })
-void initObservability()
 
 const queryClient = new QueryClient()
 
@@ -34,6 +33,7 @@ const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configure
 
 export default function RootLayout() {
   useOtaUpdates()
+  useRumNavigationTracking()
   const router = useRouter()
   const pathname = usePathname()
   // Kept in sync (via its own effect, not during render — see
@@ -75,18 +75,20 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <LocaleProvider>
-          <ThemeProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(app)" />
-              <Stack.Screen name="(auth)" />
-            </Stack>
-            <PortalHost />
-            <Toaster position="bottom-center" />
-          </ThemeProvider>
-        </LocaleProvider>
-      </QueryClientProvider>
+      <RumProvider>
+        <QueryClientProvider client={queryClient}>
+          <LocaleProvider>
+            <ThemeProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(app)" />
+                <Stack.Screen name="(auth)" />
+              </Stack>
+              <PortalHost />
+              <Toaster position="bottom-center" />
+            </ThemeProvider>
+          </LocaleProvider>
+        </QueryClientProvider>
+      </RumProvider>
     </GestureHandlerRootView>
   )
 }

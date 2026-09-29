@@ -66,7 +66,12 @@ jobs:
           # Each script line runs on its own, so the retry must fit on one.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml || { adb logcat -d > "$HOME/.maestro/tests/logcat.txt"; exit 1; }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-verify
+          path: ~/.maestro/tests
 
   # The post-init shell must stay green: strip the demo and run the same gate.
   init-project-shell:
@@ -125,4 +130,9 @@ jobs:
           # Each script line runs on its own, so the retry must fit on one.
           script: |
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml || { adb logcat -d > "$HOME/.maestro/tests/logcat.txt"; exit 1; }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-init-project-shell
+          path: ~/.maestro/tests

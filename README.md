@@ -128,7 +128,8 @@ routes give every screen a deep link for free, scheme derived from the
 package name (`app.config.ts`).
 
 ```bash
-adb shell am start -a android.intent.action.VIEW -d "madrileno://settings"
+adb shell am start -a android.intent.action.VIEW -d "madrileno://auctions/123"
+xcrun simctl openurl booted "madrileno://auctions/123"
 ```
 
 A deep link into an authed route while logged out lands on `/login` (the
@@ -136,12 +137,51 @@ auth gate waits for the token store to hydrate, finds no session and
 redirects) and continues to the original target after login — the target is
 captured in memory only, never persisted.
 
-Universal / App Links (`https://` links that open the app instead of a
-browser) are prepared behind `EXPO_PUBLIC_ASSOCIATED_DOMAIN`: set it and
-`app.config.ts` adds the iOS associated domain and the Android `autoVerify`
-intent filter. Not verifiable in this repo (no domain, no Mac) — see
-[`docs/deep-links.md`](docs/deep-links.md) for the `assetlinks.json` /
-`apple-app-site-association` templates and how to test them.
+### Universal / App Links (opt-in)
+
+`https://` links that open the app instead of a browser are prepared behind
+`EXPO_PUBLIC_ASSOCIATED_DOMAIN`. Set it at build time (e.g. `app.example.com`)
+and `app.config.ts` adds the iOS associated domain
+(`applinks:app.example.com`) and an Android `autoVerify` intent filter for
+`https://app.example.com/*`. Both platforms verify the domain by fetching a
+well-known file from it, so serve one per platform from that domain.
+`<scheme>` below is the app's scheme (derived from `package.json`'s `name`).
+
+Android — `https://app.example.com/.well-known/assetlinks.json`:
+
+```json
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.<scheme>.mobile",
+      "sha256_cert_fingerprints": ["<SHA256_FINGERPRINT>"]
+    }
+  }
+]
+```
+
+Get the fingerprint with `keytool -list -v -keystore <keystore> -alias <alias>`
+or, for EAS-managed credentials, `eas credentials`. List every signing key that
+must open the link (Play App Signing's key differs from your upload key).
+
+iOS — `https://app.example.com/.well-known/apple-app-site-association` (no
+extension, served as `application/json`), with `<TEAM_ID>` from Apple
+Developer → Membership:
+
+```json
+{
+  "applinks": {
+    "details": [{ "appID": "<TEAM_ID>.dev.<scheme>.mobile", "paths": ["/auctions/*", "/settings"] }]
+  }
+}
+```
+
+Test with `adb shell am start -a android.intent.action.VIEW -d "https://app.example.com/auctions/123"`
+(or `xcrun simctl openurl booted …`). If Android opens a browser instead,
+check verification with `adb shell pm get-app-links dev.<scheme>.mobile`.
+Universal links aren't verifiable in this repo (no domain, no Mac).
 
 ## Observability (opt-in)
 

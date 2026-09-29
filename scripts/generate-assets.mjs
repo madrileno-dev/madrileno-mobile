@@ -16,8 +16,16 @@ const transparent = { r: 0, g: 0, b: 0, alpha: 0 }
 
 // Android composites the adaptive icon's foreground over adaptiveIcon.backgroundColor
 // (the same crimson as the tile), so it needs the glyph with no tile behind it — strip
-// icon.svg's background rect.
-const iconGlyphOnly = Buffer.from(icon.replace(/<rect[^>]*\/>\s*/, ''))
+// icon.svg's background rect. Launchers mask the foreground to its central ~66% (often a
+// circle), so shrink the glyph around the centre to keep it inside that safe zone.
+const iconGlyphOnly = Buffer.from(
+  icon
+    .replace(/<rect[^>]*\/>\s*/, '')
+    .replace(
+      /(<svg[^>]*>)([\s\S]*)(<\/svg>)/,
+      '$1<g transform="translate(256 256) scale(0.8) translate(-256 -256)">$2</g>$3',
+    ),
+)
 
 const jobs = [
   ['icon.png', Buffer.from(icon), 1024, { fit: 'contain' }],

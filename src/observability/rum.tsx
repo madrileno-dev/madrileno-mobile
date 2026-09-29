@@ -16,11 +16,11 @@ if (env.rum !== null) {
   // Expo's winter runtime installs its own native `fetch` (expo/src/winter/runtime.native.ts),
   // which never goes through XMLHttpRequest. The RUM SDK's resource tracking (and its W3C
   // traceparent propagation) instruments XMLHttpRequest, so it can't see calls made through
-  // Expo's fetch. Swap back to React Native's own XHR-backed fetch — module scope, so this runs
-  // as soon as this file is first imported, before any component (and therefore any API call)
+  // Expo's fetch. Swap in whatwg-fetch — the XHR-backed fetch React Native itself ships —
+  // at module scope, so this runs before any component (and therefore any API call)
   // renders. Left untouched (and left as Expo's fetch) when RUM is disabled.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const rnFetch = require('react-native/Libraries/Network/fetch') as {
+  const rnFetch = require('whatwg-fetch') as {
     fetch: typeof fetch
     Headers: typeof Headers
     Request: typeof Request

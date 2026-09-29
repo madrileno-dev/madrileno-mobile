@@ -15,9 +15,8 @@ const splash = fs.readFileSync(path.join('assets', 'splash.svg'))
 const transparent = { r: 0, g: 0, b: 0, alpha: 0 }
 
 // Android composites the adaptive icon's foreground over adaptiveIcon.backgroundColor
-// (the same burgundy as the tile), so it needs the white glyph with no tile behind it —
-// strip icon.svg's background rect rather than reuse splash.svg's burgundy glyph, which
-// would be invisible against a burgundy background.
+// (the same crimson as the tile), so it needs the glyph with no tile behind it — strip
+// icon.svg's background rect.
 const iconGlyphOnly = Buffer.from(icon.replace(/<rect[^>]*\/>\s*/, ''))
 
 const jobs = [

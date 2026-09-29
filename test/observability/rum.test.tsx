@@ -183,7 +183,7 @@ describe('RUM fetch swap', () => {
           },
         },
       }))
-      jest.doMock('react-native/Libraries/Network/fetch', () => ({
+      jest.doMock('whatwg-fetch', () => ({
         fetch: mockRnFetch,
         Headers: mockHeaders,
         Request: mockRequest,

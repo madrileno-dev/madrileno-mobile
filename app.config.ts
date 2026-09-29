@@ -61,7 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: bundleId,
     adaptiveIcon: {
       foregroundImage: './assets/generated/adaptive-icon-foreground.png',
-      backgroundColor: '#772938',
+      backgroundColor: '#B5122B',
     },
     ...(associatedDomain
       ? {

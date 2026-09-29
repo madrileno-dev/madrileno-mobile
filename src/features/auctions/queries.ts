@@ -59,6 +59,7 @@ export function usePlaceBid(auctionId: string) {
         void queryClient.invalidateQueries({
           queryKey: bidsRoute.get.key({ input: { params: { auctionId } } }),
         })
+        void queryClient.invalidateQueries({ queryKey: auctionsRoute.get.key() })
       },
     }),
   )

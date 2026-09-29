@@ -10,9 +10,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const { preference } = useThemePreference()
   const nativewindColorScheme = useColorScheme()
 
-  // The only place the preference reaches the color scheme. Keyed on the
-  // preference alone: nativewind's hook returns a fresh object every render,
-  // and re-applying on each render ping-pongs with Appearance change events.
+  // Keyed on the preference alone: nativewind's hook returns a new object every
+  // render, and re-applying ping-pongs with Appearance events.
   useEffect(() => {
     colorScheme.set(preference)
   }, [preference])

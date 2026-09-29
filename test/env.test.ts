@@ -6,8 +6,7 @@ function setOrDelete(key: string, value: string | undefined): void {
 function loadEnv(): typeof import('@/env') {
   let loaded: typeof import('@/env') | undefined
   jest.isolateModules(() => {
-    // Must be a synchronous require (not a dynamic import) so each call
-    // re-evaluates src/env.ts against the current process.env.
+    // Synchronous require re-evaluates src/env.ts against process.env.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     loaded = require('@/env') as typeof import('@/env')
   })

@@ -6,10 +6,7 @@ export function useAuth(): { tokens: Tokens | null; isHydrated: boolean; logout:
   const tokens = useSyncExternalStore(tokenStore.subscribe, tokenStore.get)
   const isHydrated = useSyncExternalStore(tokenStore.subscribe, tokenStore.isHydrated)
   const logout = useCallback(() => {
-    // A deliberate logout should send the next login to the auction list,
-    // not back to wherever the user logged out from — unlike an involuntary
-    // session loss (e.g. a rejected refresh), where returning to the
-    // previous screen is right. See returnTo.ts.
+    // A deliberate logout returns to the list, not to where the user was.
     forgetReturnTo()
     tokenStore.set(null)
   }, [])

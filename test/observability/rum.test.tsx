@@ -97,8 +97,7 @@ describe('RumProvider', () => {
     let FreshRumProvider: typeof import('@/observability/rum').RumProvider | undefined
     const outerReact = jest.requireActual<typeof import('react')>('react')
     jest.isolateModules(() => {
-      // The isolated registry would otherwise load a second React whose hooks
-      // have no dispatcher under the outer renderer.
+      // Otherwise the isolated registry loads a second React.
       jest.doMock('react', () => outerReact)
       jest.doMock('@/env', () => ({
         env: {
@@ -112,8 +111,7 @@ describe('RumProvider', () => {
           },
         },
       }))
-      // Must be a synchronous require (not a dynamic import) so jest.doMock,
-      // which patches the CommonJS module registry, applies to it.
+      // Synchronous require, so jest.doMock applies.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const rum = require('@/observability/rum') as typeof import('@/observability/rum')
       FreshRumProvider = rum.RumProvider
@@ -159,12 +157,7 @@ describe('RUM fetch swap', () => {
     const sentinelFetch = (() => {}) as unknown as typeof fetch
     globalThis.fetch = sentinelFetch
 
-    // Mock RN's fetch module rather than letting it run for real: its real
-    // implementation installs onto the global only if nothing is already there
-    // (see node_modules/whatwg-fetch's `if (!g.fetch) { g.fetch = fetch }`), which
-    // makes the *real* module's behavior depend on load order in a way this
-    // isolated re-require doesn't reproduce faithfully. Mocking it removes that
-    // dependency and tests only what rum.tsx itself does with the module's exports.
+    // whatwg-fetch only installs onto an empty global, so its real behavior depends on load order.
     const mockRnFetch = (() => {}) as unknown as typeof fetch
     const mockHeaders = class {} as unknown as typeof Headers
     const mockRequest = class {} as unknown as typeof Request

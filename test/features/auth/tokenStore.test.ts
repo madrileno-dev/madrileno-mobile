@@ -90,10 +90,7 @@ describe('tokenStore', () => {
   })
 
   it('treats a failed keychain read as logged out and still reports hydrated', async () => {
-    // The shared `tokenStore` instance is already hydrated by earlier tests,
-    // so `isHydrated()` on it proves nothing about the pre-hydrate state.
-    // Load a fresh module instance instead, whose `hydrated` module state
-    // genuinely starts false.
+    // The shared instance is already hydrated; load a fresh one.
     let isolated!: {
       store: typeof tokenStore
       getItemAsync: jest.Mock

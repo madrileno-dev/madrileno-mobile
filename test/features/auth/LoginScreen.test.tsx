@@ -30,9 +30,7 @@ describe('LoginScreen', () => {
     await submit('a@example.com')
     await waitFor(() => expect(tokenStore.get()?.jwt).toBe('j'))
     expect(tokenStore.get()?.email).toBe('a@example.com')
-    // Navigation on success is (auth)/_layout's job (see AuthLayout.test.tsx):
-    // it reacts to the token store and consumes the one-shot return-to value
-    // itself, so LoginScreen must not also call router.replace.
+    // Navigation is (auth)/_layout's job.
     expect(mockRouter.replace).not.toHaveBeenCalled()
   })
 

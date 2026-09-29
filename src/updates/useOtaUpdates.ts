@@ -19,9 +19,7 @@ export interface OtaDeps {
 
 let lastCheck = Number.NEGATIVE_INFINITY
 
-// Consent gates the DOWNLOAD, not the reload: expo-updates launches whatever is
-// on disk at the next cold start, so fetching first would apply behind the
-// user's back. Check → prompt → fetch+reload only on accept.
+// Consent gates the download: whatever is on disk launches at the next cold start.
 export async function checkForOtaUpdate(deps: OtaDeps): Promise<void> {
   if (!deps.isEnabled) return
   if (deps.now() - lastCheck < THROTTLE_MS) return
@@ -29,8 +27,7 @@ export async function checkForOtaUpdate(deps: OtaDeps): Promise<void> {
   try {
     const { isAvailable } = await deps.checkForUpdate()
     if (!isAvailable) return
-    // The accept callback runs long after this try/catch has returned, so it
-    // must handle its own failure: a dropped download reports and offers a retry.
+    // Runs after this try/catch returned, so it handles its own failure.
     const accept = async (): Promise<void> => {
       try {
         await deps.fetchUpdate()

@@ -18,8 +18,7 @@ module.exports = defineConfig([
   expoConfig,
   prettier,
   {
-    // Typed rules only where type information exists. Applied globally they
-    // abort on babel.config.js and friends with a parserOptions.project error.
+    // Only where type info exists; globally it breaks on babel.config.js & co.
     files: ['**/*.{ts,tsx}'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
@@ -46,8 +45,7 @@ module.exports = defineConfig([
   },
   { files: ['src/components/ui/**/*.tsx'], rules: { 'react/display-name': 'off' } },
   {
-    // eslint-config-expo only grants `__dirname`/`__filename` to metro.config.js;
-    // our other root CJS config files (this one included) need them too.
+    // eslint-config-expo grants these only to metro.config.js.
     files: ['**/*.{js,mjs,cjs}'],
     extends: [tseslint.configs.disableTypeChecked, prettier],
     languageOptions: { globals: { __dirname: 'readonly', __filename: 'readonly' } },

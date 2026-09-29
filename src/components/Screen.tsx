@@ -10,8 +10,7 @@ interface ScreenProps {
   className?: string
 }
 
-// Safe-area aware screen body. The Stack header owns the top inset; this pads
-// bottom and sides. `form` adds keyboard avoidance for screens with inputs.
+// The Stack header owns the top inset. `form` adds keyboard avoidance.
 export function Screen({ children, scroll = false, form = false, className }: ScreenProps) {
   const insets = useSafeAreaInsets()
   const padding = {

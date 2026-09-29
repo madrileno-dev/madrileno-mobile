@@ -18,8 +18,6 @@ export function writeThemePreference(preference: ThemePreference): void {
 
 type Listener = () => void
 
-// One in-memory owner of the preference, so every reader sees the same value
-// and only ThemeProvider applies it to the color scheme.
 let current: ThemePreference = readThemePreference()
 const listeners = new Set<Listener>()
 

@@ -2,8 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native'
 import { RootErrorBoundary } from '@/components/RootErrorBoundary'
 
 describe('RootErrorBoundary', () => {
-  // Plain render, not renderWithProviders: Expo Router mounts this outside
-  // the root layout's own providers when the layout itself throws.
+  // No providers: Expo Router mounts it outside them.
   it('renders the heading and the error message', async () => {
     await render(<RootErrorBoundary error={new Error('boom')} retry={jest.fn()} />)
 

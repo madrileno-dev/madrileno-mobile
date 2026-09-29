@@ -3,11 +3,7 @@ import { createElement, Fragment, type ReactNode } from 'react'
 import { tokenStore } from '@/features/auth/tokenStore'
 import { server } from './mswServer'
 
-// In-memory stand-in for the keychain. The state lives INSIDE the factory:
-// jest hoists jest.mock() above the imports, so a module-level Map referenced
-// from the factory would still be in its temporal dead zone when the first
-// import (tokenStore → expo-secure-store) evaluates the mock. Only `mock`-prefixed
-// variables may be captured, and even those must be initialised lazily.
+// Keychain stand-in. State lives inside the factory: jest.mock is hoisted above imports.
 jest.mock('expo-secure-store', () => {
   const store = new Map<string, string>()
   return {
@@ -58,10 +54,7 @@ jest.mock('@rn-primitives/portal', () => ({
   Portal: ({ children }: { children: unknown }) => children,
 }))
 
-// Metro's css transform (which reads tailwind.config's darkMode: 'class' and
-// registers it as a nativewind flag) never runs under Jest, so
-// useColorScheme().setColorScheme would otherwise throw "Unable to manually
-// set color scheme without using darkMode: class".
+// Metro's css transform, which registers darkMode: 'class', doesn't run under Jest.
 StyleSheet.registerCompiled({ $compiled: true, flags: { darkMode: 'class' } })
 
 jest.mock('expo-updates', () => ({
@@ -72,10 +65,7 @@ jest.mock('expo-updates', () => ({
   reloadAsync: jest.fn(),
 }))
 
-// Real @openobserve/mobile-react-native exports drag in TurboModule specs;
-// stand in for the whole module so no native module loads under Jest.
-// OpenObserveProviderConfiguration stays a real-ish class (plain field copy)
-// so tests can inspect the shape buildRumConfiguration produces.
+// No native modules under Jest; the configuration class stays inspectable.
 export const mockOpenObserveProvider = jest.fn((props: { children?: ReactNode }) =>
   createElement(Fragment, null, props.children),
 )
@@ -122,8 +112,7 @@ jest.mock('sonner-native', () => ({ toast: mockToast, Toaster: () => null }))
 
 export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }
 jest.mock('expo-router', () => {
-  // Spread the actual module first: navTheme.ts imports DefaultTheme/DarkTheme
-  // from expo-router at module scope, so those must stay real values.
+  // navTheme.ts needs the real DefaultTheme/DarkTheme.
   const actual = jest.requireActual<object>('expo-router')
   return {
     ...actual,
@@ -131,8 +120,7 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => ({}),
     usePathname: () => '/',
     Link: ({ children }: { children: ReactNode }) => children,
-    // A real <Redirect> performs a router.replace(href) as a side effect;
-    // mirror that so layouts that render one are testable via mockRouter.
+    // A real <Redirect> calls router.replace(href).
     Redirect: ({ href }: { href: unknown }) => {
       mockRouter.replace(href)
       return null

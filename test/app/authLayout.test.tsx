@@ -15,10 +15,7 @@ describe('AuthLayout', () => {
     tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
     const { unmount } = await render(<AuthLayout />)
     expect(mockRouter.replace).toHaveBeenCalledWith('/settings')
-    // Unmount before the global afterEach's tokenStore.set(null): that runs
-    // ahead of RNTL's own auto-cleanup (registered later, when this file
-    // imports RNTL) and would otherwise notify this still-mounted,
-    // useAuth()-subscribed component outside of act().
+    // Unmount before the global afterEach clears tokens outside act().
     await unmount()
   })
 
@@ -39,10 +36,7 @@ describe('AuthLayout', () => {
     setReturnTo('/settings')
     tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
     const { rerender, unmount } = await render(<AuthLayout />)
-    // Redirect's href feeds an unmemoized useFocusEffect closure in the real
-    // component, so every re-render before navigation completes re-fires
-    // router.replace with whatever href that render computed. A second call
-    // to the one-shot consumeReturnTo() must not silently fall back to "/".
+    // A second consumeReturnTo() must not fall back to '/'.
     await rerender(<AuthLayout />)
     await rerender(<AuthLayout />)
     expect(mockRouter.replace).toHaveBeenCalledWith('/settings')
@@ -55,32 +49,21 @@ describe('AuthLayout', () => {
     const { result, unmount } = await renderHook(() => useAuth())
     await act(async () => {
       result.current.logout()
-      // Drain any scheduler work the resulting tokenStore notification
-      // schedules, so it cannot bleed into the next test's render/act calls.
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     await unmount()
-    // This is exactly what app/(app)/_layout.tsx's gate does as a side
-    // effect of the resulting null session: `setReturnTo(pathname)`. That
-    // one-liner is covered by the gate's existing redirect-to-login
-    // behavior; what's under test here is that logout() suppressed it.
+    // What the (app) gate does on a null session.
     setReturnTo('/settings')
     expect(consumeReturnTo()).toBeNull()
   })
 
   it('after a deliberate logout, the next login redirects to the auction list, not back to the previous screen', async () => {
-    // Simulate having been on Settings, then logging out from there — the
-    // exact sequence useAuth().logout() performs (forgetReturnTo() is
-    // covered on its own above).
     setReturnTo('/settings')
     forgetReturnTo()
     tokenStore.set(null)
-    // The (app) gate's setReturnTo(pathname) call, fired as a side effect of
-    // the null session, must be suppressed.
     setReturnTo('/settings')
     expect(consumeReturnTo()).toBeNull()
 
-    // Simulate logging back in within the same app process.
     tokenStore.set({ jwt: 'j2', refreshToken: 'r2', email: 'a@example.com' })
     const { unmount } = await render(<AuthLayout />)
     expect(mockRouter.replace).toHaveBeenCalledWith('/')
@@ -88,10 +71,7 @@ describe('AuthLayout', () => {
   })
 
   it('an involuntary session invalidation still records the return-to target', () => {
-    // A rejected refresh clears tokens directly (tokenStore.set(null)),
-    // without going through useAuth().logout() — so forgetReturnTo() is
-    // never called, and the gate's setReturnTo(pathname) call must NOT be
-    // suppressed.
+    // A rejected refresh clears tokens without logout(), so the capture stands.
     tokenStore.set({ jwt: 'j', refreshToken: 'r', email: 'a@example.com' })
     tokenStore.set(null)
     setReturnTo('/settings')

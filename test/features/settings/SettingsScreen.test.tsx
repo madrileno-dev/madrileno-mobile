@@ -15,10 +15,7 @@ describe('SettingsScreen', () => {
     const { unmount } = await renderWithProviders(<SettingsScreen />)
     expect(screen.getByText('Signed in as a@example.com')).toBeTruthy()
     expect(screen.getByText(/Version/)).toBeTruthy()
-    // Unmount before the global afterEach's tokenStore.set(null): that runs
-    // ahead of RNTL's own auto-cleanup (registered later, when this file
-    // imports RNTL) and would otherwise notify this still-mounted,
-    // useAuth()-subscribed component outside of act().
+    // Unmount before the global afterEach clears tokens outside act().
     await unmount()
   })
 

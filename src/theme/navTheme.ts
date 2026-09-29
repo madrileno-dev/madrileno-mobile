@@ -1,7 +1,6 @@
 import { DarkTheme, DefaultTheme, type Theme } from 'expo-router'
 
-// Mirrors the HSL token values in global.css. If those change, update the
-// matching entry here too.
+// Mirrors global.css.
 export const NAV_THEME: { light: Theme; dark: Theme } = {
   light: {
     ...DefaultTheme,

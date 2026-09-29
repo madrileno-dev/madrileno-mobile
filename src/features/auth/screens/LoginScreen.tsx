@@ -30,10 +30,7 @@ export function LoginScreen() {
     setProblem(null)
     try {
       const res = await client.v1.auth.dev.post({ body: { email } })
-      // Navigating to the return-to target (or home) is (auth)/_layout's job:
-      // it reacts to the token store and consumes the one-shot return-to
-      // value itself, so there is exactly one navigation, not a race between
-      // this screen and the layout's own auth guard.
+      // (auth)/_layout navigates once the token store changes.
       tokenStore.set({ jwt: res.jwt, refreshToken: res.refreshToken, email })
     } catch (error) {
       setProblem(problemFrom(error) ?? { type: 'unknown', status: 0, title: t('failed') })

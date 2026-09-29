@@ -1,11 +1,5 @@
-// Composes two upstream resolvers that each only know how to wrap Jest's
-// defaultResolver directly, so neither can be chained via jest.config.js's
-// single `resolver` slot:
-// - @react-native/jest-preset's resolver drops react-native's `exports`
-//   field so its subpaths stay mockable (RFC0894 backwards compatibility).
-// - react-native-worklets/jest/resolver strips "native" extensions when
-//   resolving its own package, so Jest loads the JS worklets runtime
-//   instead of the native turbo module react-native-reanimated needs.
+// Chains two resolvers Jest's single `resolver` slot can't compose: RN's (keeps
+// its subpaths mockable) and worklets' (loads the JS runtime, not the native one).
 module.exports = (request, options) => {
   const originalPackageFilter = options.packageFilter
   const resolveOptions =

@@ -29,8 +29,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
   const price = usePriceFormatter()
   const rejectionMessage = useRejectionMessage()
   const placeBid = usePlaceBid(auction.id)
-  // zod 4 infers `unknown` as the input of z.coerce.number(); the <string>
-  // argument declares the wire input so the form field and resolver agree.
+  // zod infers `unknown` input for z.coerce; declare it so form and resolver agree.
   const bidSchema = z.object({
     amount: z.coerce.number<string>().positive(t('bidAmountPositive')),
   })

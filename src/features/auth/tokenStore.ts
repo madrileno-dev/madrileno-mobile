@@ -16,10 +16,7 @@ export type Tokens = z.infer<typeof tokensSchema>
 
 type Listener = () => void
 
-// The in-memory mirror is authoritative once hydrated. This is a single
-// process and nothing else writes the keychain entry, so it is never re-read:
-// an async read racing a rotation could restore a spent single-use refresh
-// token (see the spec, "tokenStore").
+// Never re-read after hydrating: a racing read could restore a spent refresh token.
 let current: Tokens | null = null
 let hydrated = false
 let pending: Promise<void> = Promise.resolve()
@@ -49,8 +46,7 @@ export const tokenStore = {
     try {
       current = parse(await SecureStore.getItemAsync(STORAGE_KEY))
     } catch {
-      // A locked or corrupt keychain must not strand the app behind a null
-      // layout: start logged out and let the user log in again.
+      // A locked or corrupt keychain starts logged out.
       current = null
     }
     hydrated = true

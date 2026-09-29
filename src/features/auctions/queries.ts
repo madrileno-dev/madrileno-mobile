@@ -15,9 +15,7 @@ const auctionsRoute = orpc.v1.auctions
 const auctionRoute = orpc.v1.auctions.byAuctionId
 const bidsRoute = orpc.v1.auctions.byAuctionId.bids
 
-// Offset-paged on the wire, infinite in the UI: the next offset is derived
-// from the page just received, and the list fetches it on end-reached. The
-// web's prev/next pager has no place on a phone.
+// Offset-paged on the wire, infinite scroll in the UI.
 export function useAuctionsInfinite() {
   return useInfiniteQuery(
     auctionsRoute.get.infiniteOptions({

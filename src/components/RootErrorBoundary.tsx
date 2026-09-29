@@ -5,9 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
 import { messages } from '@/i18n/config'
 
-// Expo Router renders this outside the root layout's providers when the
-// layout itself throws, so it must not depend on LocaleProvider,
-// ThemeProvider, QueryClientProvider or safe-area context.
+// Rendered outside the root layout's providers when the layout itself throws.
 const t = createTranslator({ locale: 'en', messages, namespace: 'error' })
 
 export function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) {

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Rasterize assets/icon.svg and assets/splash.svg into the PNGs app.config.ts references.
-// The PNGs are committed: EAS Build runs its npm hooks after `expo prebuild`, so nothing
-// can generate them in time on a clean remote build. Re-run after editing the SVGs.
+// Rasterizes the icon/splash SVGs. The PNGs are committed: EAS runs npm hooks
+// after prebuild, too late to generate them. Re-run after editing the SVGs.
 import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -14,10 +13,8 @@ const icon = fs.readFileSync(path.join('assets', 'icon.svg'), 'utf8')
 const splash = fs.readFileSync(path.join('assets', 'splash.svg'))
 const transparent = { r: 0, g: 0, b: 0, alpha: 0 }
 
-// Android composites the adaptive icon's foreground over adaptiveIcon.backgroundColor
-// (the same crimson as the tile), so it needs the glyph with no tile behind it — strip
-// icon.svg's background rect. Launchers mask the foreground to its central ~66% (often a
-// circle), so shrink the glyph around the centre to keep it inside that safe zone.
+// Glyph only (the tile is adaptiveIcon.backgroundColor), shrunk into the
+// launcher's ~66% safe zone.
 const iconGlyphOnly = Buffer.from(
   icon
     .replace(/<rect[^>]*\/>\s*/, '')

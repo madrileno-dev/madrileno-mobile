@@ -1,8 +1,4 @@
-// jest-expo's own transform map has no entry for `.mjs`, so a pure-ESM
-// node_modules dependency (msw's `rettime`) fails to load under Jest's
-// CJS runtime even when transformIgnorePatterns lets it through. Reuse the
-// preset's transform (keeps its babel options and asset transformer) and
-// add the missing `.mjs` -> babel-jest mapping.
+// jest-expo doesn't transform .mjs, which pure-ESM deps (msw's rettime) need.
 const { transform: presetTransform } = require('jest-expo/jest-preset')
 
 module.exports = {

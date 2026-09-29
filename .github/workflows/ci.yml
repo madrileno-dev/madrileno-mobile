@@ -34,7 +34,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # The action's default also requests the legacy `tools` package, which the SDK
+      # repository no longer serves.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - run: pnpm exec expo prebuild --platform all --no-install --clean
       - run: sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' android/app/build.gradle
       - run: cd android && ./gradlew assembleRelease --no-daemon
@@ -89,7 +93,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # The action's default also requests the legacy `tools` package, which the SDK
+      # repository no longer serves.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - run: pnpm exec expo prebuild --platform all --no-install --clean
       - run: sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' android/app/build.gradle
       - run: cd android && ./gradlew assembleRelease --no-daemon

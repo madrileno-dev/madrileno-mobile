@@ -59,7 +59,8 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          # Headless CI image: no launcher to ANR over the app on a cold boot.
+          target: aosp_atd
           profile: pixel_6
           emulator-options: ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
@@ -123,7 +124,8 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          # Headless CI image: no launcher to ANR over the app on a cold boot.
+          target: aosp_atd
           profile: pixel_6
           emulator-options: ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true

@@ -243,6 +243,10 @@ bypasses `XMLHttpRequest`, which is what the SDK instruments — so enabling
 RUM, and only then, swaps `globalThis.fetch` back to React Native's
 XHR-backed fetch.
 
+The session is tagged with the signed-in user's id — read from the JWT, the
+same id the backend puts on its spans as `app.user.id`, never the email — so
+one id finds a user's app sessions and their backend traces.
+
 Automatic tap tracking is **off**: the SDK's interaction auto-instrumentation
 patches React's element creation and crashes against NativeWind's JSX
 runtime. Record taps manually with `O2Rum.addAction` where you need them.

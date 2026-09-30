@@ -2,7 +2,9 @@ import { render } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import { env } from '@/env'
 import { buildRumConfiguration, RumProvider } from '@/observability/rum'
-import { mockOpenObserveProvider } from '../setup'
+import { mockOpenObserveProvider, mockSetUserInfo } from '../setup'
+
+type TokenStoreModule = typeof import('@/features/auth/tokenStore')
 
 describe('buildRumConfiguration', () => {
   it('builds the RUM/logs configuration from a RumConfig and the API base URL', () => {
@@ -95,6 +97,7 @@ describe('RumProvider', () => {
 
   it('mounts OpenObserveProvider when env.rum is configured', async () => {
     let FreshRumProvider: typeof import('@/observability/rum').RumProvider | undefined
+    let freshTokenStore: TokenStoreModule['tokenStore'] | undefined
     const outerReact = jest.requireActual<typeof import('react')>('react')
     jest.isolateModules(() => {
       // Otherwise the isolated registry loads a second React.
@@ -115,6 +118,9 @@ describe('RumProvider', () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const rum = require('@/observability/rum') as typeof import('@/observability/rum')
       FreshRumProvider = rum.RumProvider
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const auth = require('@/features/auth/tokenStore') as TokenStoreModule
+      freshTokenStore = auth.tokenStore
     })
     if (FreshRumProvider === undefined) throw new Error('RumProvider did not load')
 
@@ -137,6 +143,12 @@ describe('RumProvider', () => {
       ([props]) => (props as { configuration?: unknown }).configuration,
     )
     expect(second).toBe(first)
+
+    const [[props]] = mockOpenObserveProvider.mock.calls as [[{ onInitialization?: () => void }]]
+    const claims = btoa(JSON.stringify({ userId: 'u-1' })).replace(/=+$/, '')
+    freshTokenStore?.set({ jwt: `h.${claims}.s`, refreshToken: 'r', email: 'a@example.com' })
+    props.onInitialization?.()
+    expect(mockSetUserInfo).toHaveBeenCalledWith({ id: 'u-1' })
   })
 })
 

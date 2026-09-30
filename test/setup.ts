@@ -69,6 +69,8 @@ jest.mock('expo-updates', () => ({
 export const mockOpenObserveProvider = jest.fn((props: { children?: ReactNode }) =>
   createElement(Fragment, null, props.children),
 )
+export const mockSetUserInfo = jest.fn((_user: { id: string }) => Promise.resolve())
+export const mockClearUserInfo = jest.fn(() => Promise.resolve())
 jest.mock('@openobserve/mobile-react-native', () => {
   class MockOpenObserveProviderConfiguration {
     clientToken: string
@@ -95,6 +97,10 @@ jest.mock('@openobserve/mobile-react-native', () => {
     PropagatorType: { TRACECONTEXT: 'tracecontext', B3: 'b3', B3MULTI: 'b3multi' },
     OpenObserveProviderConfiguration: MockOpenObserveProviderConfiguration,
     OpenObserveProvider: (props: { children?: ReactNode }) => mockOpenObserveProvider(props),
+    O2SdkReactNative: {
+      setUserInfo: (user: { id: string }) => mockSetUserInfo(user),
+      clearUserInfo: () => mockClearUserInfo(),
+    },
   }
 })
 

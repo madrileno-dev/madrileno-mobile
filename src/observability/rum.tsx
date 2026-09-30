@@ -1,5 +1,6 @@
 import {
   BatchSize,
+  O2SdkReactNative,
   OpenObserveProvider,
   OpenObserveProviderConfiguration,
   PropagatorType,
@@ -11,6 +12,8 @@ import Constants from 'expo-constants'
 import { useNavigationContainerRef } from 'expo-router'
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { env, type RumConfig } from '@/env'
+import { tokenStore } from '@/features/auth/tokenStore'
+import { trackRumUser } from './rumUser'
 
 if (env.rum !== null) {
   // Expo's native fetch bypasses XHR, which the RUM SDK instruments (resources and
@@ -72,6 +75,13 @@ export function buildRumConfiguration(
   return configuration
 }
 
+function startRumUserTracking(): void {
+  trackRumUser(tokenStore, {
+    set: (id) => void O2SdkReactNative.setUserInfo({ id }),
+    clear: () => void O2SdkReactNative.clearUserInfo(),
+  })
+}
+
 export function RumProvider({ children }: { children: ReactNode }) {
   // RootLayout re-renders on every navigation.
   const configuration = useMemo(
@@ -87,7 +97,11 @@ export function RumProvider({ children }: { children: ReactNode }) {
     [],
   )
   if (configuration === null) return <>{children}</>
-  return <OpenObserveProvider configuration={configuration}>{children}</OpenObserveProvider>
+  return (
+    <OpenObserveProvider configuration={configuration} onInitialization={startRumUserTracking}>
+      {children}
+    </OpenObserveProvider>
+  )
 }
 
 export function useRumNavigationTracking(): void {

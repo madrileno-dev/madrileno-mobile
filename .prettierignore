@@ -1,0 +1,9 @@
+node_modules
+android
+ios
+.expo
+src/contracts
+assets/generated
+pnpm-lock.yaml
+docs
+.superpowers

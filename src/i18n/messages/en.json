@@ -1,0 +1,82 @@
+{
+  "nav": {
+    "logOut": "Log out",
+    "logIn": "Log in",
+    "settings": "Settings",
+    "home": "Home"
+  },
+  "theme": {
+    "heading": "Appearance",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "login": {
+    "heading": "Log in",
+    "hint": "Dev login: any email works when the backend runs with DEV_AUTH_ENABLED=true.",
+    "emailLabel": "Email",
+    "emailInvalid": "Enter a valid email address",
+    "submit": "Log in",
+    "submitting": "Logging in…",
+    "failed": "Login failed — is the backend up?"
+  },
+  "home": {
+    "heading": "It works",
+    "body": "This is the post-init shell: typed API client, auth, routing, tests, OTA updates. Add your first feature under src/features/ and route it from app/(app)/."
+  },
+  "settings": {
+    "signedInAs": "Signed in as {email}",
+    "version": "Version {version} · update {updateId}",
+    "noUpdate": "embedded"
+  },
+  "notFound": {
+    "title": "Not found",
+    "heading": "Screen not found",
+    "link": "Back to the start"
+  },
+  "error": {
+    "heading": "Something went wrong",
+    "retry": "Try again",
+    "sessionExpired": "Your session expired — log in again."
+  },
+  "updates": {
+    "available": "A new version is available.",
+    "update": "Update",
+    "failed": "Couldn’t download the update.",
+    "retry": "Try again"
+  },
+  "auction": {
+    "listTitle": "Auctions",
+    "errorList": "Couldn’t load auctions — is the backend up?",
+    "staleBanner": "Showing cached auctions — couldn’t refresh.",
+    "empty": "No auctions yet",
+    "emptyBody": "Log in and create one via the API.",
+    "ends": "ends {when}",
+    "statusOpen": "Open",
+    "statusClosed": "Closed",
+    "statusCancelled": "Cancelled",
+    "startedAt": "started at {price}",
+    "detailError": "Couldn’t load this auction — does it exist?",
+    "bidAmountLabel": "Your bid ({currency})",
+    "bidAmountPositive": "Bid must be a positive amount",
+    "bidOpen": "Place bid",
+    "bidDialogTitle": "Place a bid",
+    "bidDialogBody": "Current price {price}. Enter a higher amount.",
+    "bidPlace": "Place bid",
+    "bidPlacing": "Placing…",
+    "bidCancel": "Cancel",
+    "bidPlaced": "Bid placed.",
+    "bidFailed": "Couldn’t place the bid — try again.",
+    "bidHistory": "Bid history",
+    "bidNone": "No bids yet — be the first.",
+    "bidError": "Couldn’t load the bid history.",
+    "bidLoadMore": "Load more bids",
+    "bidLoadingMore": "Loading…",
+    "bidBy": "by {bidder} · {when}",
+    "rejectBidTooLow": "Bid too low — someone got there first. The current price has moved.",
+    "rejectAlreadyHighest": "You already hold the highest bid.",
+    "rejectOwnAuction": "You can’t bid on your own auction.",
+    "rejectNotOpen": "This auction is no longer open for bids.",
+    "rejectAuthExpired": "Your session expired — log in again to bid."
+  }
+}

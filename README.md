@@ -95,17 +95,45 @@ distribution), `preview` (internal APK, channel `preview`), `production`
 `{ policy: "appVersion" }`, so an OTA update only applies to a build whose
 `version` (`package.json`) matches.
 
-The template ships with no EAS project bound to it. Run `eas init` once,
-then set `EAS_OWNER` and `EAS_PROJECT_ID` (build-time only, not
-`EXPO_PUBLIC_*` — no secret) so `app.config.ts` picks them up: in your shell
-or `.env` for local commands, and as
+### EAS setup
+
+The template ships with no EAS project bound to it. Run eas-cli through
+`pnpm run eas …`: it uses `npx eas-cli@latest` (Expo advises against a project
+dependency) and loads `.env.local` / `.env` first, which eas-cli itself doesn't.
+
+```bash
+pnpm run eas login
+pnpm run eas init --non-interactive --force   # creates the project; prints its id
+```
+
+`eas init` can't write the id into the dynamic `app.config.ts`, which reads it
+from the environment instead. Put both values in `.env.local` for local
+commands, and set them as
 [EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
-for cloud builds — the gitignored `.env` never reaches EAS Build.
+for cloud builds, which never see local env files:
+
+```bash
+# .env.local
+EAS_OWNER=<account-or-org>
+EAS_PROJECT_ID=<id printed by eas init>
+```
+
+```bash
+pnpm run eas env:set --name EAS_OWNER --value <account-or-org> \
+  --environment preview --environment production --visibility plaintext
+pnpm run eas env:set --name EAS_PROJECT_ID --value <id> \
+  --environment preview --environment production --visibility plaintext
+```
+
+Then build; the first build creates the Android keystore and the update
+channel:
 
 ```bash
 pnpm run build:preview      # eas build --profile preview
 pnpm run build:production   # eas build --profile production
 ```
+
+### OTA updates
 
 OTA updates (`src/updates/useOtaUpdates.ts`) check on launch and on
 foreground (throttled to once per 5 minutes) and toast when one is
@@ -117,9 +145,13 @@ the next time the app opens. The order is check, then prompt, then call
 downloads nothing. Disabled in dev and in Expo Go.
 
 ```bash
-pnpm run update:preview      # eas update --channel preview
-pnpm run update:production   # eas update --channel production
+pnpm run update:preview      # eas update --channel preview --environment preview
+pnpm run update:production   # eas update --channel production --environment production
 ```
+
+The runtime version tracks `version` only, so publish an update only from JS
+whose native dependencies match the installed build; after a native change,
+bump `version` and ship a new build.
 
 ## Deep links
 
@@ -343,8 +375,9 @@ pnpm run sync-contracts
 | `e2e`                                                                    | `maestro test .maestro` against a running emulator                                                                                                                                                 |
 | `native:prebuild`                                                        | `expo prebuild --clean` (not named `prebuild`: npm/pnpm would run it automatically as `build`'s pre-hook)                                                                                          |
 | `generate-assets`                                                        | rasterize `assets/icon.svg` / `assets/splash.svg` into the committed PNGs under `assets/generated/`                                                                                                |
+| `eas`                                                                    | eas-cli with `.env.local` / `.env` loaded (`pnpm run eas <command>`)                                                                                                                               |
 | `build:preview` / `build:production`                                     | `eas build` with the profile                                                                                                                                                                       |
-| `update:preview` / `update:production`                                   | `eas update --channel …`                                                                                                                                                                           |
+| `update:preview` / `update:production`                                   | `eas update --channel … --environment …`                                                                                                                                                           |
 | `sync-contracts`                                                         | vendor the backend-generated contract                                                                                                                                                              |
 | `init-project`                                                           | strip the demo                                                                                                                                                                                     |
 

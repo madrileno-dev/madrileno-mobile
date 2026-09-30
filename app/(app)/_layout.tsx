@@ -2,6 +2,7 @@ import { Link, Redirect, Stack, usePathname } from 'expo-router'
 import { Settings as SettingsIcon } from 'lucide-react-native'
 import { Pressable } from 'react-native'
 import { useTranslations } from 'use-intl'
+import { BrandTitle } from '@/components/BrandTitle'
 import { Icon } from '@/components/ui/icon'
 import { setReturnTo } from '@/features/auth/returnTo'
 import { useAuth } from '@/features/auth/useAuth'
@@ -25,6 +26,8 @@ export default function AppLayout() {
         name="index"
         options={{
           title: indexTitle,
+          headerTitle: () => <BrandTitle />,
+          headerLargeTitle: false,
           headerRight: () => (
             <Link href="/settings" asChild>
               <Pressable accessibilityLabel={tNav('settings')} testID="open-settings" hitSlop={8}>

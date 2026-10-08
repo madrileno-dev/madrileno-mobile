@@ -83,5 +83,6 @@ export function registerAuthTokenProvider(options?: { onSessionExpired?: () => v
       tokenStore.set(null)
       options?.onSessionExpired?.()
     },
+    subscribe: tokenStore.subscribe,
   })
 }

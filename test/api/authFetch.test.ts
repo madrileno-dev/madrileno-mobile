@@ -9,7 +9,7 @@ const BASE = 'http://api.test'
 const USER = { id: '019ed9bb-0000-7000-8000-000000000042', emailVerified: true }
 const REFRESHED = {
   jwt: 'fresh-jwt',
-  refreshToken: '22222222-2222-4222-8222-222222222222',
+  refreshToken: 'q8Zp1tH0wXr6Yb3VnL9eKc2sDf7Gj4Ma5Uo0Ri8TyEw',
   userCreated: false,
 }
 

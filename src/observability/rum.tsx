@@ -29,8 +29,8 @@ function promptForRumConsent(): void {
   })
 }
 
+// Not PENDING: that collects on the device and uploads it all on a later grant.
 export function trackingConsent(consent: RumConsent | null): TrackingConsent {
-  if (consent === null) return TrackingConsent.PENDING
   return consent === 'granted' ? TrackingConsent.GRANTED : TrackingConsent.NOT_GRANTED
 }
 

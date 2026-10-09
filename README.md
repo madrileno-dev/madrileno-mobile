@@ -243,8 +243,8 @@ against a live instance). Expo installs its own native `fetch` that bypasses
 swaps `globalThis.fetch` back to React Native's XHR-backed fetch in every build:
 dev, tests and production run the same networking stack.
 
-**Consent.** RUM starts with tracking consent pending: nothing is sent until
-the user allows it, through a one-time prompt or Settings → Usage data (shown
+**Consent.** RUM starts with tracking consent not granted: nothing is
+collected or sent until the user allows it, through a one-time prompt or Settings → Usage data (shown
 only when RUM is configured). The choice is stored on the device.
 
 The session is tagged with the signed-in user's id — read from the JWT, the

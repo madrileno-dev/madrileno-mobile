@@ -17,7 +17,7 @@ type Listener = () => void
 let current = read()
 const listeners = new Set<Listener>()
 
-// null until the user has chosen; RUM sends nothing until then.
+// null until the user has chosen; RUM collects nothing until then.
 export const rumConsentStore = {
   get: (): RumConsent | null => current,
   set: (consent: RumConsent): void => {

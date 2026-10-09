@@ -154,7 +154,7 @@ describe('RumProvider', () => {
     props.onInitialization?.()
     expect(mockSetUserInfo).toHaveBeenCalledWith({ id: 'u-1' })
 
-    expect((first as { trackingConsent: string }).trackingConsent).toBe('pending')
+    expect((first as { trackingConsent: string }).trackingConsent).toBe('not_granted')
     freshConsentStore?.set('granted')
     expect(mockSetTrackingConsent).toHaveBeenCalledWith('granted')
   })

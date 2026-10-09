@@ -3,8 +3,8 @@ import { rumConsentStore } from '@/observability/consent'
 import { trackingConsent } from '@/observability/rum'
 
 describe('RUM consent', () => {
-  it('is pending until the user chooses', () => {
-    expect(trackingConsent(null)).toBe(TrackingConsent.PENDING)
+  it('collects nothing until the user allows it', () => {
+    expect(trackingConsent(null)).toBe(TrackingConsent.NOT_GRANTED)
     expect(trackingConsent('granted')).toBe(TrackingConsent.GRANTED)
     expect(trackingConsent('denied')).toBe(TrackingConsent.NOT_GRANTED)
   })

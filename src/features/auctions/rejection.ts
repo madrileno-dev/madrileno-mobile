@@ -1,11 +1,13 @@
 import { isDefinedError } from '@orpc/client'
 import { useTranslations } from 'use-intl'
 import { problemFrom } from '@/api/problem'
+import { usePriceFormatter } from '@/features/auctions/format'
 import type { PlaceBidError } from '@/features/auctions/queries'
 
-export function useRejectionMessage(): (error: PlaceBidError) => string {
+export function useRejectionMessage(): (error: PlaceBidError, currency: string) => string {
   const t = useTranslations('auction')
-  return (error) => {
+  const price = usePriceFormatter()
+  return (error, currency) => {
     if (!isDefinedError(error)) {
       const problem = problemFrom(error)
       if (problem?.status === 401) return t('rejectAuthExpired')
@@ -14,7 +16,7 @@ export function useRejectionMessage(): (error: PlaceBidError) => string {
     const code = error.code
     switch (code) {
       case 'result:bid-too-low':
-        return t('rejectBidTooLow')
+        return t('rejectBidTooLow', { min: price(error.data.minAmount, currency) })
       case 'result:already-highest-bidder':
         return t('rejectAlreadyHighest')
       case 'result:cannot-bid-on-own-auction':

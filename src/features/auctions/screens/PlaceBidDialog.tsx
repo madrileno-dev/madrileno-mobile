@@ -67,7 +67,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
         },
         onError: (error) => {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-          setRejection(rejectionMessage(error))
+          setRejection(rejectionMessage(error, auction.currency))
         },
       },
     )

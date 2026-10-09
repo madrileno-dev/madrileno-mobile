@@ -102,7 +102,9 @@ describe('AuctionDetailScreen', () => {
     )
     await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
     await openDialogAndBid('120')
-    expect(await screen.findByText(/Bid too low — someone got there first/)).toBeTruthy()
+    expect(
+      await screen.findByText(/someone got there first. The minimum is now €300.00/),
+    ).toBeTruthy()
   })
 
   it('clears the rejection and amount when the dialog is cancelled and reopened', async () => {

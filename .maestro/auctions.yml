@@ -1,0 +1,32 @@
+appId: dev.madrileno.mobile
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: 'login-email'
+- inputText: 'maestro@example.com'
+- tapOn:
+    id: 'login-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'open-settings'
+    timeout: 10000
+- tapOn:
+    id: 'open-settings'
+- assertVisible: 'Signed in as maestro@example.com'
+- back
+- tapOn:
+    id: 'auction-.*'
+    index: 0
+- extendedWaitUntil:
+    visible: 'Bid history'
+    timeout: 10000
+- tapOn:
+    id: 'bid-open'
+- tapOn:
+    id: 'bid-amount'
+- inputText: '1'
+- tapOn:
+    id: 'bid-submit'
+- assertVisible:
+    id: 'bid-rejection'

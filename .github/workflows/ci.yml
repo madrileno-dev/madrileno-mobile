@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  MAESTRO_VERSION: 2.10.0
+  EMULATOR_OPTIONS: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Generates the untracked .expo/types/router.d.ts.
+      - run: pnpm run routes:types
+      # The contract is vendored (src/contracts), so CI needs no backend.
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run format:check
+      - run: pnpm test
+      # Icon/splash PNGs are committed; make sure they match their SVG sources.
+      - run: pnpm run generate-assets && git diff --exit-code -- assets/generated
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # The default package list includes the removed legacy `tools`.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: pnpm exec expo prebuild --platform all --no-install --clean
+      - run: sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' android/app/build.gradle
+      # Only the emulator's ABI, and more metaspace than prebuild's 512m, which lint exhausts.
+      - run: cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+        timeout-minutes: 30
+      - name: Install Maestro
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Maestro smoke on the emulator
+        timeout-minutes: 20
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          # Headless CI image: no launcher to ANR over the app on a cold boot.
+          target: aosp_atd
+          profile: pixel_6
+          emulator-options: ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: true
+          # Each script line runs on its own, so the retry must fit on one.
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml || { adb logcat -d > "$HOME/.maestro/tests/logcat.txt"; exit 1; }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-verify
+          path: ~/.maestro/tests
+
+  # The post-init shell must stay green: strip the demo and run the same gate.
+  init-project-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/init-project.mjs ci-shell
+      - run: |
+          test ! -f LICENSE || { echo "LICENSE not deleted"; exit 1; }
+          ! grep -q '^## License' README.md || { echo "README License section not stripped"; exit 1; }
+      # After stripping routes, regenerate the route types before checking them.
+      - run: pnpm run routes:types
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run format:check
+      - run: pnpm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # The default package list includes the removed legacy `tools`.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: pnpm exec expo prebuild --platform all --no-install --clean
+      - run: sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/' android/app/build.gradle
+      # Only the emulator's ABI, and more metaspace than prebuild's 512m, which lint exhausts.
+      - run: cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+        timeout-minutes: 30
+      - name: Install Maestro
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Maestro smoke on the emulator
+        timeout-minutes: 20
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          # Headless CI image: no launcher to ANR over the app on a cold boot.
+          target: aosp_atd
+          profile: pixel_6
+          emulator-options: ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: true
+          # Each script line runs on its own, so the retry must fit on one.
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            maestro test .maestro/smoke.yml || maestro test .maestro/smoke.yml || { adb logcat -d > "$HOME/.maestro/tests/logcat.txt"; exit 1; }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-init-project-shell
+          path: ~/.maestro/tests

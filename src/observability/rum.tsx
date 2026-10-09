@@ -22,9 +22,15 @@ import { trackRumUser } from './rumUser'
 const t = createTranslator({ locale: 'en', messages, namespace: 'consent' })
 
 function promptForRumConsent(): void {
-  toast(t('prompt'), {
+  const id = toast(t('prompt'), {
     duration: Number.POSITIVE_INFINITY,
-    action: { label: t('allow'), onClick: () => rumConsentStore.set('granted') },
+    action: {
+      label: t('allow'),
+      onClick: () => {
+        rumConsentStore.set('granted')
+        toast.dismiss(id)
+      },
+    },
     cancel: { label: t('decline'), onClick: () => rumConsentStore.set('denied') },
   })
 }

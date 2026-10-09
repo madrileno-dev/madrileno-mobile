@@ -2,7 +2,12 @@ import { render } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import { env } from '@/env'
 import { buildRumConfiguration, RumProvider } from '@/observability/rum'
-import { mockOpenObserveProvider, mockSetTrackingConsent, mockSetUserInfo } from '../setup'
+import {
+  mockOpenObserveProvider,
+  mockSetTrackingConsent,
+  mockSetUserInfo,
+  mockToast,
+} from '../setup'
 
 type TokenStoreModule = typeof import('@/features/auth/tokenStore')
 type ConsentModule = typeof import('@/observability/consent')
@@ -127,6 +132,7 @@ describe('RumProvider', () => {
       freshConsentStore = (require('@/observability/consent') as ConsentModule).rumConsentStore
     })
     if (FreshRumProvider === undefined) throw new Error('RumProvider did not load')
+    mockToast.mockReturnValue('consent-toast')
 
     const { getByText, rerender } = await render(
       <FreshRumProvider>
@@ -157,5 +163,15 @@ describe('RumProvider', () => {
     expect((first as { trackingConsent: string }).trackingConsent).toBe('not_granted')
     freshConsentStore?.set('granted')
     expect(mockSetTrackingConsent).toHaveBeenCalledWith('granted')
+
+    // The prompt shown on mount: declining and allowing both record the choice, allowing also dismisses it.
+    type Prompt = { action: { onClick: () => void }; cancel: { onClick: () => void } }
+    const [[, prompt]] = mockToast.mock.calls as [[string, Prompt]]
+    prompt.cancel.onClick()
+    expect(freshConsentStore?.get()).toBe('denied')
+    expect(mockSetTrackingConsent).toHaveBeenLastCalledWith('not_granted')
+    prompt.action.onClick()
+    expect(freshConsentStore?.get()).toBe('granted')
+    expect(mockToast.dismiss).toHaveBeenCalledWith('consent-toast')
   })
 })

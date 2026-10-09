@@ -119,7 +119,11 @@ jest.mock('@openobserve/mobile-react-navigation', () => ({
   },
 }))
 
-export const mockToast = Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn() })
+export const mockToast = Object.assign(jest.fn(), {
+  success: jest.fn(),
+  error: jest.fn(),
+  dismiss: jest.fn(),
+})
 jest.mock('sonner-native', () => ({ toast: mockToast, Toaster: () => null }))
 
 export const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn() }

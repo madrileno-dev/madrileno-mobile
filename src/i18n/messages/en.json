@@ -45,6 +45,15 @@
     "failed": "Couldn’t download the update.",
     "retry": "Try again"
   },
+  "consent": {
+    "prompt": "Send crash reports and performance data to help improve the app?",
+    "allow": "Allow",
+    "decline": "No thanks",
+    "heading": "Usage data",
+    "body": "Crash reports and performance data, linked to your account id. Never your email.",
+    "granted": "Allowed",
+    "denied": "Not allowed"
+  },
   "auction": {
     "listTitle": "Auctions",
     "errorList": "Couldn’t load auctions — is the backend up?",
@@ -55,10 +64,24 @@
     "statusOpen": "Open",
     "statusClosed": "Closed",
     "statusCancelled": "Cancelled",
+    "colorDessert": "Dessert",
+    "colorFortified": "Fortified",
+    "colorOrange": "Orange",
+    "colorRed": "Red",
+    "colorRose": "Rosé",
+    "colorSparkling": "Sparkling",
+    "colorWhite": "White",
+    "bottleHalf": "Half bottle",
+    "bottleStandard": "Standard bottle",
+    "bottleMagnum": "Magnum",
+    "bottleDoubleMagnum": "Double magnum",
+    "bottleJeroboam": "Jeroboam",
+    "bottleOther": "Other size",
     "startedAt": "started at {price}",
     "detailError": "Couldn’t load this auction — does it exist?",
     "bidAmountLabel": "Your bid ({currency})",
     "bidAmountPositive": "Bid must be a positive amount",
+    "bidAmountInvalid": "Enter an amount, like 120 or 120.50",
     "bidOpen": "Place bid",
     "bidDialogTitle": "Place a bid",
     "bidDialogBody": "Current price {price}. Enter a higher amount.",
@@ -77,6 +100,8 @@
     "rejectAlreadyHighest": "You already hold the highest bid.",
     "rejectOwnAuction": "You can’t bid on your own auction.",
     "rejectNotOpen": "This auction is no longer open for bids.",
-    "rejectAuthExpired": "Your session expired — log in again to bid."
+    "rejectAuthExpired": "Your session expired — log in again to bid.",
+    "rejectNotStarted": "This auction hasn’t started yet.",
+    "rejectNotFound": "This auction no longer exists."
   }
 }

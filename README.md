@@ -13,7 +13,7 @@ Native Testing Library + MSW, plus Maestro e2e flows.
 ## The contract loop (the whole point)
 
 ```
-Scala router specs ──sbt test──▶ target/baklava/orpc/src/*.ts
+Scala router specs ──sbt testFull──▶ target/baklava/orpc/src/*.ts
                                         │  pnpm run sync-contracts
                                         ▼
                               src/contracts/ (vendored, committed)
@@ -22,7 +22,7 @@ Scala router specs ──sbt test──▶ target/baklava/orpc/src/*.ts
                          pnpm run typecheck  ← fails on contract drift
 ```
 
-Rename a field in a backend DTO, run `sbt test` + `pnpm run sync-contracts`,
+Rename a field in a backend DTO, run `sbt testFull` + `pnpm run sync-contracts`,
 and `pnpm run typecheck` fails at the exact mobile call site. The contract is
 committed, so CI and fresh clones need no backend checkout.
 
@@ -238,10 +238,14 @@ SDK never initializes.
 Distributed tracing: the API host is listed in `firstPartyHosts` with the
 `tracecontext` propagator, so requests to the backend carry a W3C
 `traceparent` and land in the same trace as the backend's own spans (verified
-against a live instance). Expo SDK 57 installs its own native `fetch` that
-bypasses `XMLHttpRequest`, which is what the SDK instruments — so enabling
-RUM, and only then, swaps `globalThis.fetch` back to React Native's
-XHR-backed fetch.
+against a live instance). Expo installs its own native `fetch` that bypasses
+`XMLHttpRequest`, which is what the SDK instruments, so `src/api/installFetch.ts`
+swaps `globalThis.fetch` back to React Native's XHR-backed fetch in every build:
+dev, tests and production run the same networking stack.
+
+**Consent.** RUM starts with tracking consent pending: nothing is sent until
+the user allows it, through a one-time prompt or Settings → Usage data (shown
+only when RUM is configured). The choice is stored on the device.
 
 The session is tagged with the signed-in user's id — read from the JWT, the
 same id the backend puts on its spans as `app.user.id`, never the email — so
@@ -349,7 +353,7 @@ pnpm run native:prebuild
 
 Run this after renaming: the bundle id (`dev.<scheme>.mobile`) follows the
 package name, and the native `android/`/`ios/` directories aren't committed.
-After the backend's own `init-project.scala` and `sbt test`, resync the
+After the backend's own `init-project.scala` and `sbt testFull`, resync the
 contract:
 
 ```bash

@@ -5,7 +5,6 @@ import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner-native'
 import { useTranslations } from 'use-intl'
 import { z } from 'zod'
-import { problemFrom } from '@/api/problem'
 import { Field, FieldError, FieldInput, FieldLabel } from '@/components/Field'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,9 +28,14 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
   const price = usePriceFormatter()
   const rejectionMessage = useRejectionMessage()
   const placeBid = usePlaceBid(auction.id)
-  // zod infers `unknown` input for z.coerce; declare it so form and resolver agree.
+  // Locales with a decimal comma get one from the decimal-pad keyboard.
   const bidSchema = z.object({
-    amount: z.coerce.number<string>().positive(t('bidAmountPositive')),
+    amount: z
+      .string()
+      .transform((value) => value.trim().replace(',', '.'))
+      .pipe(
+        z.coerce.number<string>({ error: t('bidAmountInvalid') }).positive(t('bidAmountPositive')),
+      ),
   })
   const {
     control,
@@ -63,8 +67,7 @@ export function PlaceBidDialog({ auction }: { auction: Auction }) {
         },
         onError: (error) => {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-          const problem = problemFrom(error)
-          setRejection(problem ? rejectionMessage(problem) : t('bidFailed'))
+          setRejection(rejectionMessage(error))
         },
       },
     )

@@ -1,22 +1,34 @@
+import { isDefinedError } from '@orpc/client'
 import { useTranslations } from 'use-intl'
-import { problemTag, type Problem } from '@/api/problem'
+import { problemFrom } from '@/api/problem'
+import type { PlaceBidError } from '@/features/auctions/queries'
 
-export function useRejectionMessage(): (problem: Problem) => string {
+export function useRejectionMessage(): (error: PlaceBidError) => string {
   const t = useTranslations('auction')
-  return (problem) => {
-    switch (problemTag(problem)) {
-      case 'bid-too-low':
+  return (error) => {
+    if (!isDefinedError(error)) {
+      const problem = problemFrom(error)
+      if (problem?.status === 401) return t('rejectAuthExpired')
+      return problem?.detail ?? t('bidFailed')
+    }
+    const code = error.code
+    switch (code) {
+      case 'result:bid-too-low':
         return t('rejectBidTooLow')
-      case 'already-highest-bidder':
+      case 'result:already-highest-bidder':
         return t('rejectAlreadyHighest')
-      case 'cannot-bid-on-own-auction':
+      case 'result:cannot-bid-on-own-auction':
         return t('rejectOwnAuction')
-      case 'auction-not-open':
+      case 'result:auction-not-open':
         return t('rejectNotOpen')
-      case 'authentication-failed':
-        return t('rejectAuthExpired')
-      default:
-        return problem.detail ?? problem.title
+      case 'result:auction-not-started':
+        return t('rejectNotStarted')
+      case 'result:auction-not-found':
+        return t('rejectNotFound')
+      default: {
+        const unhandled: never = code
+        return unhandled
+      }
     }
   }
 }

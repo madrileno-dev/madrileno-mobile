@@ -8,6 +8,8 @@ export type BidsPage = Awaited<
   ReturnType<ApiClient['v1']['auctions']['byAuctionId']['bids']['get']>
 >
 
+export type PlaceBidError = NonNullable<ReturnType<typeof usePlaceBid>['error']>
+
 export const PAGE_SIZE = 20
 export const BIDS_PAGE_SIZE = 10
 

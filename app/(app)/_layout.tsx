@@ -1,5 +1,6 @@
 import { Link, Redirect, Stack, usePathname } from 'expo-router'
 import { Settings as SettingsIcon } from 'lucide-react-native'
+import { useEffect } from 'react'
 import { Pressable } from 'react-native'
 import { useTranslations } from 'use-intl'
 import { BrandTitle } from '@/components/BrandTitle'
@@ -15,11 +16,12 @@ export default function AppLayout() {
   const tAuction = useTranslations('auction')
   const indexTitle = tAuction('listTitle')
   // mobile:auction-block-end
+  const signedOut = isHydrated && tokens === null
+  useEffect(() => {
+    if (signedOut) setReturnTo(pathname)
+  }, [signedOut, pathname])
   if (!isHydrated) return null
-  if (tokens === null) {
-    setReturnTo(pathname)
-    return <Redirect href="/login" />
-  }
+  if (tokens === null) return <Redirect href="/login" />
   return (
     <Stack screenOptions={{ headerLargeTitle: true }}>
       <Stack.Screen

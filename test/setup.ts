@@ -71,6 +71,11 @@ export const mockOpenObserveProvider = jest.fn((props: { children?: ReactNode })
 )
 export const mockSetUserInfo = jest.fn((_user: { id: string }) => Promise.resolve())
 export const mockClearUserInfo = jest.fn(() => Promise.resolve())
+export const mockSetTrackingConsent = jest.fn((_consent: string) => Promise.resolve())
+jest.mock('@react-native-community/netinfo', () =>
+  jest.requireActual<object>('@react-native-community/netinfo/jest/netinfo-mock.js'),
+)
+
 jest.mock('@openobserve/mobile-react-native', () => {
   class MockOpenObserveProviderConfiguration {
     clientToken: string
@@ -100,6 +105,7 @@ jest.mock('@openobserve/mobile-react-native', () => {
     O2SdkReactNative: {
       setUserInfo: (user: { id: string }) => mockSetUserInfo(user),
       clearUserInfo: () => mockClearUserInfo(),
+      setTrackingConsent: (consent: string) => mockSetTrackingConsent(consent),
     },
   }
 })

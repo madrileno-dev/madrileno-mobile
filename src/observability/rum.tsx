@@ -11,27 +11,28 @@ import { O2RumReactNavigationTracking } from '@openobserve/mobile-react-navigati
 import Constants from 'expo-constants'
 import { useNavigationContainerRef } from 'expo-router'
 import { useEffect, useMemo, type ReactNode } from 'react'
+import { toast } from 'sonner-native'
+import { createTranslator } from 'use-intl/core'
 import { env, type RumConfig } from '@/env'
 import { tokenStore } from '@/features/auth/tokenStore'
+import { messages } from '@/i18n/config'
+import { rumConsentStore, type RumConsent } from './consent'
 import { trackRumUser } from './rumUser'
 
-if (env.rum !== null) {
-  // Expo's native fetch bypasses XHR, which the RUM SDK instruments (resources and
-  // traceparent). Swap in RN's XHR-backed whatwg-fetch before anything renders.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const rnFetch = require('whatwg-fetch') as {
-    fetch: typeof fetch
-    Headers: typeof Headers
-    Request: typeof Request
-    Response: typeof Response
-  }
-  globalThis.fetch = rnFetch.fetch
-  globalThis.Headers = rnFetch.Headers
-  globalThis.Request = rnFetch.Request
-  globalThis.Response = rnFetch.Response
+const t = createTranslator({ locale: 'en', messages, namespace: 'consent' })
+
+function promptForRumConsent(): void {
+  toast(t('prompt'), {
+    duration: Number.POSITIVE_INFINITY,
+    action: { label: t('allow'), onClick: () => rumConsentStore.set('granted') },
+    cancel: { label: t('decline'), onClick: () => rumConsentStore.set('denied') },
+  })
 }
 
-export const RUM_TRACKING_CONSENT = TrackingConsent.GRANTED
+export function trackingConsent(consent: RumConsent | null): TrackingConsent {
+  if (consent === null) return TrackingConsent.PENDING
+  return consent === 'granted' ? TrackingConsent.GRANTED : TrackingConsent.NOT_GRANTED
+}
 
 export function buildRumConfiguration(
   rum: RumConfig,
@@ -44,7 +45,7 @@ export function buildRumConfiguration(
   const configuration = new OpenObserveProviderConfiguration(
     rum.clientToken,
     rum.env,
-    RUM_TRACKING_CONSENT,
+    trackingConsent(rumConsentStore.get()),
     {
       // The native uploader rejects http:// without this internal flag.
       additionalConfiguration: rum.endpoint.startsWith('http://')
@@ -75,7 +76,10 @@ export function buildRumConfiguration(
   return configuration
 }
 
-function startRumUserTracking(): void {
+function onRumInitialized(): void {
+  rumConsentStore.subscribe(() => {
+    void O2SdkReactNative.setTrackingConsent(trackingConsent(rumConsentStore.get()))
+  })
   trackRumUser(tokenStore, {
     set: (id) => void O2SdkReactNative.setUserInfo({ id }),
     clear: () => void O2SdkReactNative.clearUserInfo(),
@@ -96,9 +100,12 @@ export function RumProvider({ children }: { children: ReactNode }) {
           ),
     [],
   )
+  useEffect(() => {
+    if (configuration !== null && rumConsentStore.get() === null) promptForRumConsent()
+  }, [configuration])
   if (configuration === null) return <>{children}</>
   return (
-    <OpenObserveProvider configuration={configuration} onInitialization={startRumUserTracking}>
+    <OpenObserveProvider configuration={configuration} onInitialization={onRumInitialized}>
       {children}
     </OpenObserveProvider>
   )

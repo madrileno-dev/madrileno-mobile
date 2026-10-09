@@ -69,6 +69,31 @@ describe('AuctionDetailScreen', () => {
     expect(mockToast.success).toHaveBeenCalledWith('Bid placed.')
   })
 
+  it('accepts a decimal comma', async () => {
+    let posted: unknown
+    server.use(
+      detailHandler,
+      http.get(bidsUrl, () => HttpResponse.json(bidsPageFixture([], false))),
+      http.post(bidsUrl, async ({ request }) => {
+        posted = await request.json()
+        return HttpResponse.json(bidTooLowProblem, { status: 409 })
+      }),
+    )
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await openDialogAndBid('120,50')
+    await waitFor(() => expect(posted).toEqual({ amount: 120.5 }))
+  })
+
+  it('rejects a non-numeric amount with a translated message', async () => {
+    server.use(
+      detailHandler,
+      http.get(bidsUrl, () => HttpResponse.json(bidsPageFixture([], false))),
+    )
+    await renderWithProviders(<AuctionDetailScreen auctionId={AUCTION_ID} />)
+    await openDialogAndBid('abc')
+    expect(await screen.findByText('Enter an amount, like 120 or 120.50')).toBeTruthy()
+  })
+
   it('shows the typed bid-too-low rejection inline', async () => {
     server.use(
       detailHandler,

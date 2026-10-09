@@ -1,6 +1,7 @@
 import '../global.css'
+import '@/api/installFetch'
 import { PortalHost } from '@rn-primitives/portal'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import Constants from 'expo-constants'
 import * as Linking from 'expo-linking'
 import { Stack, usePathname, useRouter, type Href } from 'expo-router'
@@ -9,6 +10,7 @@ import { useEffect, useRef } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Toaster, toast } from 'sonner-native'
 import { createTranslator } from 'use-intl/core'
+import { connectQueryManagers, makeQueryClient } from '@/api/queryClient'
 import { registerAuthTokenProvider, tokenStore } from '@/features/auth/tokenStore'
 import { messages } from '@/i18n/config'
 import { LocaleProvider } from '@/i18n/LocaleProvider'
@@ -24,7 +26,8 @@ void SplashScreen.preventAutoHideAsync()
 const t = createTranslator({ locale: 'en', messages, namespace: 'error' })
 registerAuthTokenProvider({ onSessionExpired: () => toast.error(t('sessionExpired')) })
 
-const queryClient = new QueryClient()
+connectQueryManagers()
+const queryClient = makeQueryClient()
 
 const configuredScheme = Constants.expoConfig?.scheme
 const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme

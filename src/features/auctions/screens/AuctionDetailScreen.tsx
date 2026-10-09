@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import { usePriceFormatter } from '@/features/auctions/format'
 import { useAuction } from '@/features/auctions/queries'
-import { useAuctionStatusLabel } from '@/features/auctions/status'
+import { useAuctionLabels } from '@/features/auctions/labels'
 import { BidHistory } from './BidHistory'
 import { PlaceBidDialog } from './PlaceBidDialog'
 
@@ -18,7 +18,7 @@ export function AuctionDetailScreen({ auctionId }: { auctionId: string }) {
   const { data: auction, isPending, isError, refetch } = useAuction(auctionId)
   const formatInstant = useInstantFormatter()
   const price = usePriceFormatter()
-  const statusLabel = useAuctionStatusLabel()
+  const label = useAuctionLabels()
 
   if (isPending) {
     return (
@@ -47,12 +47,12 @@ export function AuctionDetailScreen({ auctionId }: { auctionId: string }) {
             {title}
           </Text>
           <Badge variant={auction.status === 'Open' ? 'default' : 'secondary'}>
-            <Text>{statusLabel(auction.status)}</Text>
+            <Text>{label.status(auction.status)}</Text>
           </Badge>
         </View>
         <Text variant="muted">
-          {auction.color} · {auction.region} · {auction.appellation} · {auction.producerName} ·{' '}
-          {auction.bottleCount}× {auction.bottleSize}
+          {label.color(auction.color)} · {auction.region} · {auction.appellation} ·{' '}
+          {auction.producerName} · {auction.bottleCount}× {label.bottleSize(auction.bottleSize)}
         </Text>
         {auction.description != null && <Text>{auction.description}</Text>}
         <View className="gap-0.5">

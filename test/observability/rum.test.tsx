@@ -2,9 +2,10 @@ import { render } from '@testing-library/react-native'
 import { Text } from 'react-native'
 import { env } from '@/env'
 import { buildRumConfiguration, RumProvider } from '@/observability/rum'
-import { mockOpenObserveProvider, mockSetUserInfo } from '../setup'
+import { mockOpenObserveProvider, mockSetTrackingConsent, mockSetUserInfo } from '../setup'
 
 type TokenStoreModule = typeof import('@/features/auth/tokenStore')
+type ConsentModule = typeof import('@/observability/consent')
 
 describe('buildRumConfiguration', () => {
   it('builds the RUM/logs configuration from a RumConfig and the API base URL', () => {
@@ -98,6 +99,7 @@ describe('RumProvider', () => {
   it('mounts OpenObserveProvider when env.rum is configured', async () => {
     let FreshRumProvider: typeof import('@/observability/rum').RumProvider | undefined
     let freshTokenStore: TokenStoreModule['tokenStore'] | undefined
+    let freshConsentStore: ConsentModule['rumConsentStore'] | undefined
     const outerReact = jest.requireActual<typeof import('react')>('react')
     jest.isolateModules(() => {
       // Otherwise the isolated registry loads a second React.
@@ -121,6 +123,8 @@ describe('RumProvider', () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const auth = require('@/features/auth/tokenStore') as TokenStoreModule
       freshTokenStore = auth.tokenStore
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      freshConsentStore = (require('@/observability/consent') as ConsentModule).rumConsentStore
     })
     if (FreshRumProvider === undefined) throw new Error('RumProvider did not load')
 
@@ -149,73 +153,9 @@ describe('RumProvider', () => {
     freshTokenStore?.set({ jwt: `h.${claims}.s`, refreshToken: 'r', email: 'a@example.com' })
     props.onInitialization?.()
     expect(mockSetUserInfo).toHaveBeenCalledWith({ id: 'u-1' })
-  })
-})
 
-describe('RUM fetch swap', () => {
-  const originalFetch = globalThis.fetch
-  const originalHeaders = globalThis.Headers
-  const originalRequest = globalThis.Request
-  const originalResponse = globalThis.Response
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch
-    globalThis.Headers = originalHeaders
-    globalThis.Request = originalRequest
-    globalThis.Response = originalResponse
-  })
-
-  it("swaps globalThis.fetch/Headers/Request/Response to React Native's XHR-backed versions when RUM is enabled", () => {
-    const sentinelFetch = (() => {}) as unknown as typeof fetch
-    globalThis.fetch = sentinelFetch
-
-    // whatwg-fetch only installs onto an empty global, so its real behavior depends on load order.
-    const mockRnFetch = (() => {}) as unknown as typeof fetch
-    const mockHeaders = class {} as unknown as typeof Headers
-    const mockRequest = class {} as unknown as typeof Request
-    const mockResponse = class {} as unknown as typeof Response
-
-    jest.isolateModules(() => {
-      jest.doMock('@/env', () => ({
-        env: {
-          apiBaseUrl: 'http://10.0.2.2:9000',
-          rum: {
-            clientToken: 'test-token',
-            endpoint: 'http://10.0.2.2:55080',
-            applicationId: 'madrileno-mobile',
-            org: 'default',
-            env: 'development',
-          },
-        },
-      }))
-      jest.doMock('whatwg-fetch', () => ({
-        fetch: mockRnFetch,
-        Headers: mockHeaders,
-        Request: mockRequest,
-        Response: mockResponse,
-      }))
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('@/observability/rum')
-    })
-
-    expect(globalThis.fetch).toBe(mockRnFetch)
-    expect(globalThis.Headers).toBe(mockHeaders)
-    expect(globalThis.Request).toBe(mockRequest)
-    expect(globalThis.Response).toBe(mockResponse)
-  })
-
-  it('leaves globalThis.fetch untouched when RUM is disabled', () => {
-    const sentinelFetch = (() => {}) as unknown as typeof fetch
-    globalThis.fetch = sentinelFetch
-
-    jest.isolateModules(() => {
-      jest.doMock('@/env', () => ({
-        env: { apiBaseUrl: 'http://10.0.2.2:9000', rum: null },
-      }))
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('@/observability/rum')
-    })
-
-    expect(globalThis.fetch).toBe(sentinelFetch)
+    expect((first as { trackingConsent: string }).trackingConsent).toBe('pending')
+    freshConsentStore?.set('granted')
+    expect(mockSetTrackingConsent).toHaveBeenCalledWith('granted')
   })
 })

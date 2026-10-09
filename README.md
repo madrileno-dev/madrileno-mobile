@@ -13,7 +13,7 @@ Native Testing Library + MSW, plus Maestro e2e flows.
 ## The contract loop (the whole point)
 
 ```
-Scala router specs ──sbt testFull──▶ target/baklava/orpc/src/*.ts
+Scala router specs ──sbt testFull──▶ target/baklava/views/client/orpc/src/*.ts
                                         │  pnpm run sync-contracts
                                         ▼
                               src/contracts/ (vendored, committed)

@@ -39,8 +39,11 @@ Start the backend ([backend README](../madrileno)) with dev auth enabled —
 it's on by default (`DEV_AUTH_ENABLED=true` in the backend's `.env.sample`):
 
 ```bash
-(cd ../madrileno && sbt)   # in the sbt shell: ~reStart
+(cd ../madrileno && ./scripts/app.scala start)
 ```
+
+`start` returns once the backend answers on `localhost:9000`, or exits 1 with
+the last log lines; `./scripts/app.scala stop` shuts it down.
 
 Then run the app on the Android emulator:
 

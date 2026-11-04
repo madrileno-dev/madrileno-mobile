@@ -22,8 +22,10 @@ the API: they drift from the backend without a compile error.
      missing there is a backend change first.
 2. Find the procedure. The client mirrors the URL: a kebab-case segment
    becomes camelCase, a path parameter becomes `by<Name>`, and the method is
-   the last key, so `GET /v1/loans/{loanId}` is `orpc.v1.loans.byLoanId.get`. Its input is `{ params, query, body }` as
-   `src/contracts/v1/<area>.contract.ts` declares; the payload types are in
+   the last key, so `GET /v1/loans/{loanId}` is `orpc.v1.loans.byLoanId.get`.
+   Its input is `{ params, query, body }` as
+   `src/contracts/v1/<area>.contract.ts` declares, with query parameter names
+   as on the wire (`query: { 'due-before': ... }`); the payload types are in
    `<area>.schemas.ts` next to it.
 3. Put the hooks in `src/features/<feature>/queries.ts` and infer every type
    from `ApiClient`:
@@ -49,28 +51,54 @@ the API: they drift from the backend without a compile error.
        }),
      )
    }
+
+   export type ReturnLoanError = NonNullable<ReturnType<typeof useReturnLoan>['error']>
    ```
 
+   - a mutation takes the whole input when called:
+     `returnLoan.mutate({ params: { loanId } })`
    - a list item type is the page type indexed: `LoansPage['items'][number]`
    - a one-off call that is not a query or a mutation, like login's, uses
      `client` from `@/api/orpc`: `await client.v1.auth.dev.post({ body: { email } })`
-   - times arrive as ISO strings: convert them with `toInstant` or
-     `formatInstant` from `src/api/datetime.ts`, never `Date`
+   - times arrive as ISO strings. In a component, format them with the
+     function `useInstantFormatter()` from `src/api/datetime.ts` returns: it
+     applies the user's locale. Compare or compute with `toInstant`. Never use
+     `Date`.
 
-4. Handle the endpoint's declared errors by code: narrow with
-   `isDefinedError(error)` from `@orpc/client` and `switch` on `error.code`
-   with a `never` default, so a code the backend adds or renames breaks the
-   build. Anything else goes through `problemFrom(error)` from
+4. Handle the endpoint's declared errors by code, with the error typed from
+   the hook (`ReturnLoanError` above). Take the code into a variable before the
+   `switch`, and end it with a `never` default, so a code the backend adds or
+   renames breaks the build:
+
+   ```ts
+   if (!isDefinedError(error)) return problemFrom(error)?.detail ?? t('returnFailed')
+   const code = error.code
+   switch (code) {
+     case 'result:loan-not-found':
+       return t('loanNotFound')
+     case 'result:loan-already-returned':
+       return t('loanAlreadyReturned')
+     default: {
+       const unhandled: never = code
+       return unhandled
+     }
+   }
+   ```
+
+   `isDefinedError` is from `@orpc/client`, `problemFrom` from
    `src/api/problem.ts`. Never branch on the message text.
+
 5. Test with MSW: register handlers per test with `server.use(...)` from
-   `test/mswServer.ts`, render with `renderWithProviders` from
-   `test/renderApp.tsx` (`await` it: RNTL 14 renders asynchronously), and type
-   each fixture with the inferred type (`const loan: Loan = { ... }`), so a
-   contract change breaks the fixture too.
+   `test/mswServer.ts` and match the URL with a leading `*`
+   (`http.get('*/v1/loans/:loanId', ...)`); under Jest the client calls
+   `http://10.0.2.2:9000`, and an unmatched request fails the test. Render with
+   `renderWithProviders` from `test/renderApp.tsx` and `await` it (RNTL 14
+   renders asynchronously). Type each fixture with the inferred type
+   (`const loan: Loan = { ... }`), so a contract change breaks the fixture too.
 
 Done when:
 
-- `pnpm run typecheck`, `pnpm run lint` and `pnpm run test` pass (in a fresh
-  checkout, `pnpm run routes:types` first)
+- after `pnpm run format`, `pnpm run typecheck`, `pnpm run lint` and
+  `pnpm run test` pass (in a fresh checkout, `pnpm run routes:types` first)
 - a screen you changed works on the Android emulator (`pnpm run android`),
   which reaches the backend at `10.0.2.2:9000`

@@ -5,9 +5,9 @@ is `../madrileno-frontend`.
 # Ground rules
 
 - The API contract in `src/contracts/` is GENERATED — never edit it. Refresh it
-  with `pnpm run sync-contracts` after the backend's `sbt testFull`. If typecheck
-  breaks after a sync, fix the call sites: the backend routes are the source of
-  truth.
+  with `pnpm run sync-contracts` after the backend's `sbt --client testFull`. If
+  typecheck breaks after a sync, fix the call sites: the backend routes are the
+  source of truth.
 - ALWAYS run `pnpm run typecheck`, `pnpm run lint`, and `pnpm run test` before
   committing; format with `pnpm run format`. Run the app on the Android
   emulator (`pnpm run android`) before claiming a screen works.
@@ -25,7 +25,7 @@ is `../madrileno-frontend`.
 - Expected API failures surface as `ORPCError`s carrying the backend's Problem
   envelope in `error.data`. For an endpoint's declared errors, narrow with
   `isDefinedError` and switch exhaustively on `error.code` (a `never` default),
-  so a renamed code breaks the build; `problemTag` only for errors outside the
+  so a renamed code breaks the build; `problemFrom` only for errors outside the
   contract. Never dispatch on human-readable text.
 - No browser globals: `window`, `document`, `localStorage` do not exist here.
   Tokens live in `src/features/auth/tokenStore.ts` (expo-secure-store);

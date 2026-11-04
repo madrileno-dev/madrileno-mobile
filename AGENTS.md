@@ -43,10 +43,8 @@ is `../madrileno-frontend`.
   formatting); `auth` survives `init-project`, `auctions` is the deletable demo.
   `src/api/` — oRPC client over an auth-aware fetch (bearer + 401-refresh),
   datetime boundary; copied from the web repo, keep it diffable.
-- New API calls: use the tanstack utils `orpc` from `src/api/orpc.ts`
-  (`useQuery(orpc['<generated-key>'].get.queryOptions({ input }))`); plain
-  one-shot calls go through `client`. Infer types from `ApiClient`
-  (`Awaited<ReturnType<ApiClient['<key>']['get']>>`).
+- API calls go through `orpc` and `client` from `src/api/orpc.ts`, with types
+  inferred from `ApiClient`; the `mobile-use-api` skill has the steps.
 - Tests: jest-expo + React Native Testing Library + MSW. Register handlers per
   test with `server.use(...)`; type fixtures against contract-inferred types.
   RNTL 14: `render` and `fireEvent` are async, always `await` them. Mock
@@ -70,6 +68,12 @@ is `../madrileno-frontend`.
   (`scroll` for content, `form` for inputs); lists use FlashList.
 - Navigation: typed routes are on — `router.push('/auctions/[id]')` style hrefs
   are checked. New screens need a file in `app/`; deep links follow from it.
+
+# Procedures
+
+Use these skills instead of rebuilding the steps from existing features:
+`mobile-use-api` (sync the contract, call an endpoint, handle its errors, test
+it).
 
 # Modes
 

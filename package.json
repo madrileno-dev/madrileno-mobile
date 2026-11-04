@@ -90,6 +90,7 @@
     "update:preview": "node scripts/eas.mjs update --channel preview --environment preview",
     "update:production": "node scripts/eas.mjs update --channel production --environment production",
     "sync-contracts": "node scripts/sync-contracts.mjs",
+    "check-agents": "node scripts/check-agents.mjs",
     "init-project": "node scripts/init-project.mjs"
   },
   "private": true,

@@ -395,6 +395,7 @@ pnpm run sync-contracts
 | `build:preview` / `build:production`                                     | `eas build` with the profile                                                                                                                                                                       |
 | `update:preview` / `update:production`                                   | `eas update --channel … --environment …`                                                                                                                                                           |
 | `sync-contracts`                                                         | vendor the backend-generated contract                                                                                                                                                              |
+| `check-agents`                                                           | check the agent skills, `.agents/workspace.md` and the `.claude/skills` link                                                                                                                       |
 | `init-project`                                                           | strip the demo                                                                                                                                                                                     |
 
 ## License

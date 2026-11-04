@@ -60,6 +60,11 @@ this and every other env var the app reads.
 Log in with any email (the backend's dev auth), then browse, bid, and watch
 the typed error envelope when a bid is too low.
 
+Working on the backend and this app from the directory above both? Run
+`./scripts/workspace.scala generate` in the backend: it reads this repo's
+`.agents/workspace.md` and gives the assistant at the top the instructions,
+skills and MCP servers of each repo (see the backend's [`workspace.md`](https://github.com/madrileno-dev/madrileno/blob/main/docs/workspace.md)).
+
 ## Auth
 
 Dev login only (`POST /v1/auth/dev`), parity with the web: `LoginScreen`

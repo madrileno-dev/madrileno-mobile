@@ -27,6 +27,7 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run format:check
+      - run: pnpm run check-agents
       - run: pnpm test
       # Icon/splash PNGs are committed; make sure they match their SVG sources.
       - run: pnpm run generate-assets && git diff --exit-code -- assets/generated
@@ -95,6 +96,7 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run format:check
+      - run: pnpm run check-agents
       - run: pnpm test
       - uses: actions/setup-java@v4
         with:

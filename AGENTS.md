@@ -5,9 +5,10 @@ is `../madrileno-frontend`.
 # Ground rules
 
 - The API contract in `src/contracts/` is GENERATED — never edit it. Refresh it
-  with `pnpm run sync-contracts` after the backend's `sbt testFull`. If typecheck
-  breaks after a sync, fix the call sites: the backend routes are the source of
-  truth.
+  with `pnpm run sync-contracts` after running the backend's specs for the routes
+  you changed (`sbt --client testFull` once in a fresh backend checkout). If
+  typecheck breaks after a sync, fix the call sites: the backend routes are the
+  source of truth.
 - ALWAYS run `pnpm run typecheck`, `pnpm run lint`, and `pnpm run test` before
   committing; format with `pnpm run format`. Run the app on the Android
   emulator (`pnpm run android`) before claiming a screen works.
@@ -25,7 +26,7 @@ is `../madrileno-frontend`.
 - Expected API failures surface as `ORPCError`s carrying the backend's Problem
   envelope in `error.data`. For an endpoint's declared errors, narrow with
   `isDefinedError` and switch exhaustively on `error.code` (a `never` default),
-  so a renamed code breaks the build; `problemTag` only for errors outside the
+  so a renamed code breaks the build; `problemFrom` only for errors outside the
   contract. Never dispatch on human-readable text.
 - No browser globals: `window`, `document`, `localStorage` do not exist here.
   Tokens live in `src/features/auth/tokenStore.ts` (expo-secure-store);
@@ -43,10 +44,8 @@ is `../madrileno-frontend`.
   formatting); `auth` survives `init-project`, `auctions` is the deletable demo.
   `src/api/` — oRPC client over an auth-aware fetch (bearer + 401-refresh),
   datetime boundary; copied from the web repo, keep it diffable.
-- New API calls: use the tanstack utils `orpc` from `src/api/orpc.ts`
-  (`useQuery(orpc['<generated-key>'].get.queryOptions({ input }))`); plain
-  one-shot calls go through `client`. Infer types from `ApiClient`
-  (`Awaited<ReturnType<ApiClient['<key>']['get']>>`).
+- API calls go through `orpc` and `client` from `src/api/orpc.ts`, with types
+  inferred from `ApiClient`; the `mobile-use-api` skill has the steps.
 - Tests: jest-expo + React Native Testing Library + MSW. Register handlers per
   test with `server.use(...)`; type fixtures against contract-inferred types.
   RNTL 14: `render` and `fireEvent` are async, always `await` them. Mock
@@ -70,6 +69,12 @@ is `../madrileno-frontend`.
   (`scroll` for content, `form` for inputs); lists use FlashList.
 - Navigation: typed routes are on — `router.push('/auctions/[id]')` style hrefs
   are checked. New screens need a file in `app/`; deep links follow from it.
+
+# Procedures
+
+Use these skills instead of rebuilding the steps from existing features:
+`mobile-use-api` (sync the contract, call an endpoint, handle its errors, test
+it).
 
 # Modes
 

@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Generates the untracked .expo/types/router.d.ts.
@@ -31,10 +31,9 @@ jobs:
       - run: pnpm test
       # Icon/splash PNGs are committed; make sure they match their SVG sources.
       - run: pnpm run generate-assets && git diff --exit-code -- assets/generated
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: 17
+          java-version-file: .sdkmanrc
       # The default package list includes the removed legacy `tools`.
       - uses: android-actions/setup-android@v3
         with:
@@ -80,11 +79,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/init-project.mjs ci-shell
@@ -98,10 +97,9 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run check-agents
       - run: pnpm test
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: 17
+          java-version-file: .sdkmanrc
       # The default package list includes the removed legacy `tools`.
       - uses: android-actions/setup-android@v3
         with:

@@ -31,8 +31,11 @@ committed, so CI and fresh clones need no backend checkout.
 
 ## Quick start
 
-You need Node 22, pnpm, and an Android emulator (Android Studio's AVD
-Manager) — no Mac needed for Android dev.
+You need Node 24 (`nvm use` reads `.nvmrc`), pnpm, JDK 21 (with
+[SDKMAN](https://sdkman.io/), `sdk env install` reads `.sdkmanrc`), and an
+Android emulator (Android Studio's AVD Manager) — no Mac needed for Android
+dev. React Native compiles with a JDK 17 toolchain; Gradle uses one it finds
+on the machine or downloads it on the first build.
 
 ```bash
 pnpm install
@@ -104,7 +107,8 @@ next to any other social login, not just Google's.
 distribution), `preview` (internal APK, channel `preview`), `production`
 (channel `production`, auto-incrementing). `runtimeVersion` is pinned to
 `{ policy: "appVersion" }`, so an OTA update only applies to a build whose
-`version` (`package.json`) matches.
+`version` (`package.json`) matches. Cloud builds run on the Node version in
+`.nvmrc`: no profile sets `node`, so eas-cli falls back to that file.
 
 ### EAS setup
 
